@@ -26,14 +26,15 @@ export class AuthController {
         @Body() dto: PlatformLogin.PlatformLoginDto,
         @Res({ passthrough: true }) res: Response,
     ) {
-        const tokens = await this.authService.platformLogin(dto);
-        this.authService.setTokenCookies(res, tokens.accessToken, tokens.refreshToken);
-        return { message: 'Login successful' };
+        const result = await this.authService.platformLogin(dto);
+        this.authService.setTokenCookies(res, result.accessToken, result.refreshToken);
+        return { user: result.user };
     }
 
     @Post('platform/register')
     async merchantRegister(@Body() dto: MerchantRegister.MerchantRegisterDto) {
-        return this.authService.merchantRegister(dto);
+        const result = await this.authService.merchantRegister(dto);
+        return { message: result.message, user: result.user };
     }
 
     @Post('customer/login')
@@ -41,9 +42,9 @@ export class AuthController {
         @Body() dto: CustomerLogin.CustomerLoginDto,
         @Res({ passthrough: true }) res: Response,
     ) {
-        const tokens = await this.authService.customerLogin(dto);
-        this.authService.setTokenCookies(res, tokens.accessToken, tokens.refreshToken);
-        return { message: 'Login successful' };
+        const result = await this.authService.customerLogin(dto);
+        this.authService.setTokenCookies(res, result.accessToken, result.refreshToken);
+        return { user: result.user };
     }
 
     @Post('customer/register')
@@ -51,9 +52,9 @@ export class AuthController {
         @Body() dto: CustomerRegister.CustomerRegisterDto,
         @Res({ passthrough: true }) res: Response,
     ) {
-        const tokens = await this.authService.customerRegister(dto);
-        this.authService.setTokenCookies(res, tokens.accessToken, tokens.refreshToken);
-        return { message: 'Registration successful' };
+        const result = await this.authService.customerRegister(dto);
+        this.authService.setTokenCookies(res, result.accessToken, result.refreshToken);
+        return { user: result.user };
     }
 
     @UseGuards(JwtRefreshGuard)

@@ -16,6 +16,23 @@ import { CustomerLoginDto } from './dto/customer-login.dto';
 import { CustomerRegisterDto } from './dto/customer-register.dto';
 import { UserRole, MerchantStatus } from '@prisma/client';
 
+interface AuthUserResponse {
+    id: string;
+    email: string;
+    role: UserRole;
+    merchant?: {
+        status: MerchantStatus;
+        storeName: string;
+        storeSlug: string;
+    } | null;
+}
+
+interface CustomerAuthResponse {
+    id: string;
+    email: string;
+    role: UserRole;
+    storeSlug: string;
+}
 @Injectable()
 export class AuthService {
     constructor(
@@ -49,7 +66,29 @@ export class AuthService {
         const tokens = await this.generateTokens(user.id, user.email, user.role);
         await this.updateRefreshToken(user.id, tokens.refreshToken);
 
-        return tokens;
+        const merchant = await this.prisma.merchant.findUnique({
+            where: { userId: user.id },
+            select: { status: true, storeName: true, storeSlug: true },
+        });
+
+        const userResp: AuthUserResponse = {
+            id: user.id,
+            email: user.email,
+            role: user.role,
+            merchant: merchant
+                ? {
+                      status: merchant.status,
+                      storeName: merchant.storeName,
+                      storeSlug: merchant.storeSlug,
+                  }
+                : null,
+        };
+
+        return {
+            accessToken: tokens.accessToken,
+            refreshToken: tokens.refreshToken,
+            user: userResp,
+        };
     }
 
     async merchantRegister(dto: MerchantRegisterDto) {
@@ -66,7 +105,7 @@ export class AuthService {
         const hashedPassword = await bcrypt.hash(dto.password, 10);
         const storeSlug = dto.storeName.toLowerCase().replace(/ /g, '-');
 
-        await this.prisma.$transaction(async (tx) => {
+        const result = await this.prisma.$transaction(async (tx) => {
             const user = await tx.user.create({
                 data: {
                     email: dto.email,
@@ -75,7 +114,7 @@ export class AuthService {
                 },
             });
 
-            await tx.merchant.create({
+            const merchant = await tx.merchant.create({
                 data: {
                     userId: user.id,
                     fullName: dto.fullName,
@@ -89,9 +128,25 @@ export class AuthService {
                     status: MerchantStatus.PENDING,
                 },
             });
+
+            return { user, merchant };
         });
 
-        return { message: 'Application submitted successfully' };
+        const userResp: AuthUserResponse = {
+            id: result.user.id,
+            email: result.user.email,
+            role: result.user.role,
+            merchant: {
+                status: result.merchant.status,
+                storeName: result.merchant.storeName,
+                storeSlug: result.merchant.storeSlug,
+            },
+        };
+
+        return {
+            message: 'Application submitted successfully',
+            user: userResp,
+        };
     }
 
     async customerLogin(dto: CustomerLoginDto) {
@@ -118,7 +173,18 @@ export class AuthService {
         const tokens = await this.generateTokens(user.id, user.email, user.role);
         await this.updateRefreshToken(user.id, tokens.refreshToken);
 
-        return tokens;
+        const userResp: CustomerAuthResponse = {
+            id: user.id,
+            email: user.email,
+            role: user.role,
+            storeSlug: store.slug,
+        };
+
+        return {
+            accessToken: tokens.accessToken,
+            refreshToken: tokens.refreshToken,
+            user: userResp,
+        };
     }
 
     async customerRegister(dto: CustomerRegisterDto) {
@@ -166,7 +232,18 @@ export class AuthService {
         const tokens = await this.generateTokens(user.id, user.email, user.role);
         await this.updateRefreshToken(user.id, tokens.refreshToken);
 
-        return tokens;
+        const userResp: CustomerAuthResponse = {
+            id: user.id,
+            email: user.email,
+            role: user.role,
+            storeSlug: merchant.store!.slug,
+        };
+
+        return {
+            accessToken: tokens.accessToken,
+            refreshToken: tokens.refreshToken,
+            user: userResp,
+        };
     }
 
     async refreshTokens(userId: string, refreshToken: string) {

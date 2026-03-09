@@ -40,9 +40,7 @@ export class AuthService {
         }
 
         if (user.role === UserRole.MERCHANT) {
-            if (user.merchant?.status === MerchantStatus.PENDING) {
-                throw new ForbiddenException('PENDING');
-            }
+            // Allow merchants with PENDING status to login during development.
             if (user.merchant?.status === MerchantStatus.REJECTED) {
                 throw new ForbiddenException('REJECTED');
             }

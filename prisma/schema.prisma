@@ -1,0 +1,81 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  SUPERADMIN
+  MERCHANT
+  CUSTOMER
+}
+
+enum MerchantStatus {
+  PENDING
+  ACTIVE
+  REJECTED
+}
+
+model User {
+  id           String    @id @default(uuid())
+  email        String    @unique
+  password     String
+  role         UserRole  @default(CUSTOMER)
+  refreshToken String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  merchant     Merchant?
+  customers    Customer[]
+}
+
+model Merchant {
+  id          String         @id @default(uuid())
+  userId      String         @unique
+  user        User           @relation(fields: [userId], references: [id])
+  fullName    String
+  phone       String
+  storeName   String         @unique
+  storeSlug   String         @unique
+  category    String
+  country     String
+  city        String
+  description String?
+  status      MerchantStatus @default(PENDING)
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  store       Store?
+}
+
+model Store {
+  id           String    @id @default(uuid())
+  merchantId   String    @unique
+  merchant     Merchant  @relation(fields: [merchantId], references: [id])
+  slug         String    @unique
+  name         String
+  customDomain String?   @unique
+  domainStatus String?
+  themeId      String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  customers    Customer[]
+}
+
+model Customer {
+  id        String   @id @default(uuid())
+  storeId   String
+  store     Store    @relation(fields: [storeId], references: [id])
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  fullName  String
+  phone     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([storeId, userId])
+}

@@ -16,7 +16,7 @@ import { CustomerLoginDto } from './dto/customer-login.dto';
 import { CustomerRegisterDto } from './dto/customer-register.dto';
 import { UserRole, MerchantStatus } from '@prisma/client';
 
-interface AuthUserResponse {
+export interface AuthUserResponse {
     id: string;
     email: string;
     role: UserRole;
@@ -27,7 +27,7 @@ interface AuthUserResponse {
     } | null;
 }
 
-interface CustomerAuthResponse {
+export interface CustomerAuthResponse {
     id: string;
     email: string;
     role: UserRole;

@@ -19,6 +19,12 @@ enum MerchantStatus {
   REJECTED
 }
 
+enum ProductStatus {
+  DRAFT
+  ACTIVE
+  ARCHIVED
+}
+
 model User {
   id           String    @id @default(uuid())
   email        String    @unique
@@ -52,19 +58,52 @@ model Merchant {
 }
 
 model Store {
-  id           String    @id @default(uuid())
-  merchantId   String    @unique
-  merchant     Merchant  @relation(fields: [merchantId], references: [id])
-  slug         String    @unique
-  name         String
-  customDomain String?   @unique
-  domainStatus String?
-  themeId      String?
-  isOnboarded   Boolean   @default(false)
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  id             String    @id @default(uuid())
+  merchantId     String    @unique
+  merchant       Merchant  @relation(fields: [merchantId], references: [id])
+  slug           String    @unique
+  name           String
+  customDomain   String?   @unique
+  domainStatus   String?
+  themeId        String?
+  isOnboarded    Boolean   @default(false)
+  logo           String?
+  primaryColor   String?
+  secondaryColor String?
+  fontFamily     String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
-  customers    Customer[]
+  customers Customer[]
+  products  Product[]
+}
+
+model Product {
+  id           String        @id @default(uuid())
+  storeId      String
+  store        Store         @relation(fields: [storeId], references: [id])
+  name         String
+  description  String?
+  price        Float
+  comparePrice Float?
+  cost         Float?
+  sku          String?
+  barcode      String?
+  quantity     Int           @default(0)
+  trackStock   Boolean       @default(true)
+  weight       Float?
+  isPhysical   Boolean       @default(true)
+  category     String?
+  tags         String[]
+  images       String[]
+  slug         String
+  status       ProductStatus @default(DRAFT)
+  seoTitle     String?
+  seoDesc      String?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  @@unique([storeId, slug])
 }
 
 model Customer {

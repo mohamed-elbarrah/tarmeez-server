@@ -1,11 +1,13 @@
 import { NestFactory } from '@nestjs/core';
-import { ValidationPipe } from '@nestjs/common';
+import { NestExpressApplication } from '@nestjs/platform-express';
+import { ValidationPipe, BadRequestException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 const cookieParser = require('cookie-parser');
+import { join } from 'path';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule);
   const configService = app.get(ConfigService);
 
   app.setGlobalPrefix('api');
@@ -20,7 +22,18 @@ async function bootstrap() {
     console.error('cookieParser init error', err);
     throw err;
   }
-  app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true }));
+  app.useGlobalPipes(new ValidationPipe({
+    whitelist: true,
+    forbidNonWhitelisted: true,
+    transform: true,
+    exceptionFactory: (errors) => {
+      console.log('Validation errors:', JSON.stringify(errors, null, 2));
+      return new BadRequestException(errors);
+    },
+  }));
+
+  // serve uploaded files from /uploads
+  app.useStaticAssets(join(__dirname, '..', 'uploads'));
 
   app.enableCors({
     origin: configService.get<string>('CLIENT_URL'),

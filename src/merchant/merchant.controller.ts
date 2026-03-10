@@ -1,8 +1,12 @@
-import { Controller, Get, Patch, Body, UseGuards } from '@nestjs/common';
+import { Controller, Get, Patch, Body, UseGuards, Post, UseInterceptors, UploadedFile, BadRequestException } from '@nestjs/common';
 import { MerchantService } from './merchant.service';
 import { MerchantGuard } from './guards/merchant.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { UpdateStoreDto } from './dto/update-store.dto';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { diskStorage } from 'multer';
+import { extname } from 'path';
+import * as fs from 'fs';
 
 type JwtUser = { id: string; email?: string; role?: string };
 
@@ -22,5 +26,42 @@ export class MerchantController {
     @Body() dto: UpdateStoreDto,
   ) {
     return this.svc.updateStoreCustomization(user.id, dto);
+  }
+
+  @Post('store/upload-image')
+  @UseInterceptors(FileInterceptor('file', {
+    storage: diskStorage({
+      destination: (req, file, cb) => {
+        const user: any = (req as any).user || {};
+        const merchantId = user.id || 'unknown';
+        const dir = `uploads/stores/${merchantId}`;
+        try {
+          fs.mkdirSync(dir, { recursive: true });
+        } catch (e) {
+          // ignore
+        }
+        cb(null, dir);
+      },
+      filename: (req, file, cb) => {
+        const timestamp = Date.now();
+        const safeName = file.originalname.replace(/\s+/g, '-');
+        cb(null, `${timestamp}-${safeName}`);
+      },
+    }),
+    fileFilter: (req, file, cb) => {
+      const allowed = ['.jpg', '.jpeg', '.png', '.svg', '.ico', '.webp'];
+      const ext = extname(file.originalname).toLowerCase();
+      if (!allowed.includes(ext)) {
+        return cb(new BadRequestException('Invalid file type'), false as any);
+      }
+      cb(null, true as any);
+    },
+    limits: { fileSize: 2 * 1024 * 1024 },
+  }))
+  async uploadStoreImage(@CurrentUser() user: JwtUser, @UploadedFile() file: Express.Multer.File) {
+    if (!file) throw new BadRequestException('No file uploaded');
+    const baseUrl = process.env.SERVER_URL ?? 'http://localhost:8000';
+    const url = `${baseUrl}/uploads/stores/${user.id}/${file.filename}`;
+    return { url };
   }
 }

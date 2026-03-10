@@ -68,9 +68,15 @@ model Store {
   themeId        String?
   isOnboarded    Boolean   @default(false)
   logo           String?
+  logoWidth      Int?
+  logoHeight     Int?
+  showStoreName  Boolean   @default(true)
+  favicon        String?
   primaryColor   String?
   secondaryColor String?
+  accentColor    String?
   fontFamily     String?
+  borderRadius   String?
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 

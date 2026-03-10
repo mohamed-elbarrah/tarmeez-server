@@ -14,6 +14,8 @@ export class MerchantService {
     if (!merchant) throw new NotFoundException('Merchant not found');
     if (!merchant.store) throw new NotFoundException('Store not found');
 
+    const store: any = merchant.store as any;
+
     return {
       merchant: {
         id: merchant.id,
@@ -23,16 +25,22 @@ export class MerchantService {
         status: merchant.status,
       },
       store: {
-        id: merchant.store.id,
-        slug: merchant.store.slug,
-        name: merchant.store.name,
-        themeId: merchant.store.themeId,
-        isOnboarded: merchant.store.isOnboarded,
-        customDomain: merchant.store.customDomain,
-        logo: merchant.store.logo,
-        primaryColor: merchant.store.primaryColor,
-        secondaryColor: merchant.store.secondaryColor,
-        fontFamily: merchant.store.fontFamily,
+        id: store.id,
+        slug: store.slug,
+        name: store.name,
+        themeId: store.themeId,
+        isOnboarded: store.isOnboarded,
+        customDomain: store.customDomain,
+        logo: store.logo,
+        logoWidth: store.logoWidth,
+        logoHeight: store.logoHeight,
+        showStoreName: store.showStoreName,
+        favicon: store.favicon,
+        primaryColor: store.primaryColor,
+        secondaryColor: store.secondaryColor,
+        accentColor: store.accentColor,
+        fontFamily: store.fontFamily,
+        borderRadius: store.borderRadius,
       },
     };
   }
@@ -47,14 +55,21 @@ export class MerchantService {
       throw new NotFoundException('Store not found');
     }
 
+    // cast `data` as any to avoid TypeScript errors until Prisma Client is regenerated
     return this.prisma.store.update({
       where: { id: merchant.store.id },
       data: {
         logo: dto.logo,
+        logoWidth: dto.logoWidth,
+        logoHeight: dto.logoHeight,
+        showStoreName: dto.showStoreName,
+        favicon: dto.favicon,
         primaryColor: dto.primaryColor,
         secondaryColor: dto.secondaryColor,
+        accentColor: dto.accentColor,
         fontFamily: dto.fontFamily,
-      },
+        borderRadius: dto.borderRadius,
+      } as any,
     });
   }
 }

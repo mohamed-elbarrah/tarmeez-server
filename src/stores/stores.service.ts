@@ -42,6 +42,31 @@ export class StoresService {
             throw new NotFoundException('Store not found');
         }
 
-        return { store };
+        const s: any = store as any;
+
+        // Map store and ensure brand identity fields are included in response
+        return {
+            store: {
+                id: s.id,
+                slug: s.slug,
+                name: s.name,
+                customDomain: s.customDomain,
+                domainStatus: s.domainStatus,
+                themeId: s.themeId,
+                isOnboarded: s.isOnboarded,
+                logo: s.logo,
+                logoWidth: s.logoWidth,
+                logoHeight: s.logoHeight,
+                showStoreName: s.showStoreName,
+                favicon: s.favicon,
+                primaryColor: s.primaryColor,
+                secondaryColor: s.secondaryColor,
+                accentColor: s.accentColor,
+                fontFamily: s.fontFamily,
+                borderRadius: s.borderRadius,
+                merchant: s.merchant,
+                products: s.products,
+            },
+        };
     }
 }

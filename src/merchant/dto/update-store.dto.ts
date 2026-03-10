@@ -1,19 +1,53 @@
-import { IsString, IsOptional } from 'class-validator';
+import { IsString, IsOptional, IsInt, Min, Max, IsBoolean, IsUrl, IsHexColor } from 'class-validator';
+import { Transform, Type } from 'class-transformer';
 
 export class UpdateStoreDto {
-    @IsString()
     @IsOptional()
+    @Transform(({ value }) => value === '' ? undefined : value)
+    @IsUrl({ require_tld: false })
     logo?: string;
 
-    @IsString()
     @IsOptional()
+    @Type(() => Number)
+    @IsInt()
+    @Min(40)
+    @Max(300)
+    logoWidth?: number;
+
+    @IsOptional()
+    @Type(() => Number)
+    @IsInt()
+    @Min(20)
+    @Max(120)
+    logoHeight?: number;
+
+    @IsOptional()
+    @Type(() => Boolean)
+    @IsBoolean()
+    showStoreName?: boolean;
+
+    @IsOptional()
+    @Transform(({ value }) => value === '' ? undefined : value)
+    @IsUrl({ require_tld: false })
+    favicon?: string;
+
+    @IsOptional()
+    @IsHexColor()
     primaryColor?: string;
 
-    @IsString()
     @IsOptional()
+    @IsHexColor()
     secondaryColor?: string;
 
-    @IsString()
     @IsOptional()
+    @IsHexColor()
+    accentColor?: string;
+
+    @IsOptional()
+    @IsString()
     fontFamily?: string;
+
+    @IsOptional()
+    @IsString()
+    borderRadius?: string;
 }

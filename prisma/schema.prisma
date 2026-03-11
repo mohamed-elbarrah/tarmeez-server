@@ -72,6 +72,10 @@ model Store {
   logoHeight     Int?
   showStoreName  Boolean   @default(true)
   favicon        String?
+  storeName      String?
+  textColor      String?
+  headingColor   String?
+  buttonColor    String?
   primaryColor   String?
   secondaryColor String?
   accentColor    String?

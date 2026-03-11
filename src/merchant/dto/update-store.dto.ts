@@ -45,6 +45,22 @@ export class UpdateStoreDto {
 
     @IsOptional()
     @IsString()
+    storeName?: string;
+
+    @IsOptional()
+    @IsString()
+    textColor?: string;
+
+    @IsOptional()
+    @IsString()
+    headingColor?: string;
+
+    @IsOptional()
+    @IsString()
+    buttonColor?: string;
+
+    @IsOptional()
+    @IsString()
     fontFamily?: string;
 
     @IsOptional()

@@ -6,13 +6,13 @@ export class CustomerService {
   constructor(private prisma: PrismaService) {}
 
   private async findCustomerByUser(userId: string, storeId: string) {
-    const customer = await this.prisma.customer.findUnique({ where: { userId_storeId: { userId, storeId } as any } as any });
+    const customer = await this.prisma.customer.findFirst({ where: { userId, storeId } as any });
     if (!customer) throw new NotFoundException('Customer not found');
     return customer;
   }
 
   async getMe(user: any) {
-    const customer = await this.prisma.customer.findUnique({ where: { userId_storeId: { userId: user.id, storeId: user.storeId } as any } as any, include: { user: true } });
+    const customer = await this.prisma.customer.findFirst({ where: { userId: user.id, storeId: user.storeId } as any, include: { user: true } });
     if (!customer) throw new NotFoundException('Customer not found');
 
     return {

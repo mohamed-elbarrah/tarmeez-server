@@ -25,17 +25,26 @@ enum ProductStatus {
   ARCHIVED
 }
 
-model User {
-  id           String    @id @default(uuid())
-  email        String    @unique
-  password     String
-  role         UserRole  @default(CUSTOMER)
-  refreshToken String?
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+enum CustomerStatus {
+  ACTIVE
+  BANNED
+}
 
-  merchant     Merchant?
-  customers    Customer[]
+model User {
+  id           String   @id @default(uuid())
+  email        String
+  password     String
+  role         UserRole @default(CUSTOMER)
+  refreshToken String?
+  storeId      String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  merchant  Merchant?
+  customers Customer[]
+  store     Store?     @relation(fields: [storeId], references: [id])
+
+  @@unique([email, storeId])
 }
 
 model Merchant {
@@ -54,23 +63,23 @@ model Merchant {
   createdAt   DateTime       @default(now())
   updatedAt   DateTime       @updatedAt
 
-  store       Store?
+  store Store?
 }
 
 model Store {
-  id             String    @id @default(uuid())
-  merchantId     String    @unique
-  merchant       Merchant  @relation(fields: [merchantId], references: [id])
-  slug           String    @unique
+  id             String   @id @default(uuid())
+  merchantId     String   @unique
+  merchant       Merchant @relation(fields: [merchantId], references: [id])
+  slug           String   @unique
   name           String
-  customDomain   String?   @unique
+  customDomain   String?  @unique
   domainStatus   String?
   themeId        String?
-  isOnboarded    Boolean   @default(false)
+  isOnboarded    Boolean  @default(false)
   logo           String?
   logoWidth      Int?
   logoHeight     Int?
-  showStoreName  Boolean   @default(true)
+  showStoreName  Boolean  @default(true)
   favicon        String?
   storeName      String?
   textColor      String?
@@ -81,10 +90,11 @@ model Store {
   accentColor    String?
   fontFamily     String?
   borderRadius   String?
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
   customers Customer[]
+  users     User[]
   products  Product[]
 }
 
@@ -117,15 +127,16 @@ model Product {
 }
 
 model Customer {
-  id        String   @id @default(uuid())
+  id        String         @id @default(uuid())
   storeId   String
-  store     Store    @relation(fields: [storeId], references: [id])
+  store     Store          @relation(fields: [storeId], references: [id])
   userId    String
-  user      User     @relation(fields: [userId], references: [id])
+  user      User           @relation(fields: [userId], references: [id])
   fullName  String
   phone     String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  status    CustomerStatus @default(ACTIVE)
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
 
   @@unique([storeId, userId])
 }

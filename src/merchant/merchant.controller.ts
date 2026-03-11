@@ -1,4 +1,4 @@
-import { Controller, Get, Patch, Body, UseGuards, Post, UseInterceptors, UploadedFile, BadRequestException } from '@nestjs/common';
+import { Controller, Get, Patch, Body, UseGuards, Post, UseInterceptors, UploadedFile, BadRequestException, Query, Param } from '@nestjs/common';
 import { MerchantService } from './merchant.service';
 import { MerchantGuard } from './guards/merchant.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
@@ -14,6 +14,28 @@ type JwtUser = { id: string; email?: string; role?: string };
 @Controller('merchant')
 export class MerchantController {
   constructor(private svc: MerchantService) { }
+
+  @Get('customers')
+  async getCustomers(
+    @CurrentUser() user: JwtUser,
+    @Query('search') search?: string,
+    @Query('status') status?: string,
+    @Query('page') page = '1',
+    @Query('limit') limit = '20',
+  ) {
+    const params = { search, status, page: parseInt(page, 10), limit: parseInt(limit, 10) } as any;
+    return this.svc.getCustomers(user.id, params);
+  }
+
+  @Patch('customers/:id/status')
+  async updateCustomerStatus(
+    @CurrentUser() user: JwtUser,
+    @Param('id') id: string,
+    @Body() body: { status: 'ACTIVE' | 'BANNED' },
+  ) {
+    const { status } = body;
+    return this.svc.updateCustomerStatus(user.id, id, status);
+  }
 
   @Get('me')
   async getMyStore(@CurrentUser() user: JwtUser) {

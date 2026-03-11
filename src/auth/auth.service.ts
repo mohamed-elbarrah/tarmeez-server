@@ -33,6 +33,7 @@ export interface CustomerAuthResponse {
     role: UserRole;
     storeSlug: string;
 }
+
 @Injectable()
 export class AuthService {
     constructor(
@@ -42,8 +43,8 @@ export class AuthService {
     ) { }
 
     async platformLogin(dto: PlatformLoginDto) {
-        const user = await this.prisma.user.findUnique({
-            where: { email: dto.email },
+        const user = await this.prisma.user.findFirst({
+            where: { email: dto.email, storeId: null },
             include: { merchant: true },
         });
 
@@ -63,7 +64,7 @@ export class AuthService {
             }
         }
 
-        const tokens = await this.generateTokens(user.id, user.email, user.role);
+        const tokens = await this.generateTokens(user.id, user.email, user.role, null);
         await this.updateRefreshToken(user.id, tokens.refreshToken);
 
         const merchant = await this.prisma.merchant.findUnique({
@@ -92,9 +93,7 @@ export class AuthService {
     }
 
     async merchantRegister(dto: MerchantRegisterDto) {
-        const existingUser = await this.prisma.user.findUnique({
-            where: { email: dto.email },
-        });
+        const existingUser = await this.prisma.user.findFirst({ where: { email: dto.email, storeId: null } });
         if (existingUser) throw new ConflictException('Email already registered');
 
         const existingStore = await this.prisma.merchant.findUnique({
@@ -111,6 +110,7 @@ export class AuthService {
                     email: dto.email,
                     password: hashedPassword,
                     role: UserRole.MERCHANT,
+                    storeId: null,
                 },
             });
 
@@ -155,22 +155,25 @@ export class AuthService {
         });
         if (!store) throw new NotFoundException('Store not found');
 
-        const user = await this.prisma.user.findUnique({
-            where: { email: dto.email },
+        const user = await this.prisma.user.findFirst({
+            where: { email: dto.email, storeId: store.id },
             include: { customers: true },
         });
 
-        if (!user) throw new UnauthorizedException('Invalid credentials');
+        if (!user) throw new UnauthorizedException('البريد الإلكتروني أو كلمة المرور غير صحيحة');
 
         const isPasswordValid = await bcrypt.compare(dto.password, user.password);
-        if (!isPasswordValid) throw new UnauthorizedException('Invalid credentials');
+        if (!isPasswordValid) throw new UnauthorizedException('البريد الإلكتروني أو كلمة المرور غير صحيحة');
 
-        const isCustomerOfStore = user.customers.some((c) => c.storeId === store.id);
-        if (!isCustomerOfStore) {
-            throw new ForbiddenException('User is not a customer of this store');
-        }
+        // ensure role
+        if (user.role !== UserRole.CUSTOMER) throw new ForbiddenException('Invalid portal for this user type');
 
-        const tokens = await this.generateTokens(user.id, user.email, user.role);
+        // check customer record & status
+        const customerRecord = await this.prisma.customer.findFirst({ where: { userId: user.id, storeId: store.id } });
+        if (!customerRecord) throw new ForbiddenException('User is not a customer of this store');
+        if (customerRecord.status === 'BANNED') throw new ForbiddenException('تم حظر هذا الحساب');
+
+        const tokens = await this.generateTokens(user.id, user.email, user.role, store.id);
         await this.updateRefreshToken(user.id, tokens.refreshToken);
 
         const userResp: CustomerAuthResponse = {
@@ -195,27 +198,22 @@ export class AuthService {
         if (!merchant || !merchant.store) throw new NotFoundException('Store not found');
 
         const existingCustomer = await this.prisma.user.findFirst({
-            where: {
-                email: dto.email,
-                customers: { some: { storeId: merchant.store.id } },
-            },
+            where: { email: dto.email, storeId: merchant.store.id },
         });
-        if (existingCustomer) throw new ConflictException('Email already registered for this store');
+        if (existingCustomer) throw new ConflictException('البريد الإلكتروني مسجل مسبقاً في هذا المتجر');
 
         const hashedPassword = await bcrypt.hash(dto.password, 10);
 
         const user = await this.prisma.$transaction(async (tx) => {
-            let user = await tx.user.findUnique({ where: { email: dto.email } });
-
-            if (!user) {
-                user = await tx.user.create({
-                    data: {
-                        email: dto.email,
-                        password: hashedPassword,
-                        role: UserRole.CUSTOMER,
-                    },
-                });
-            }
+            // create a new user tied to this store
+            const user = await tx.user.create({
+                data: {
+                    email: dto.email,
+                    password: hashedPassword,
+                    role: UserRole.CUSTOMER,
+                    storeId: merchant.store!.id,
+                },
+            });
 
             await tx.customer.create({
                 data: {
@@ -229,7 +227,7 @@ export class AuthService {
             return user;
         });
 
-        const tokens = await this.generateTokens(user.id, user.email, user.role);
+        const tokens = await this.generateTokens(user.id, user.email, user.role, merchant.store!.id);
         await this.updateRefreshToken(user.id, tokens.refreshToken);
 
         const userResp: CustomerAuthResponse = {
@@ -253,10 +251,24 @@ export class AuthService {
         const refreshTokenMatches = await bcrypt.compare(refreshToken, user.refreshToken);
         if (!refreshTokenMatches) throw new ForbiddenException('Access Denied');
 
-        const tokens = await this.generateTokens(user.id, user.email, user.role);
+        const tokens = await this.generateTokens(user.id, user.email, user.role, user.storeId ?? null);
         await this.updateRefreshToken(user.id, tokens.refreshToken);
 
         return tokens;
+    }
+
+    async getCustomerProfile(userId: string, storeId: string | null) {
+        if (!storeId) return null
+        const customer = await this.prisma.customer.findFirst({ where: { userId, storeId } })
+        if (!customer) return null
+        return {
+            id: customer.id,
+            fullName: customer.fullName,
+            email: (await this.prisma.user.findUnique({ where: { id: userId } }))?.email,
+            phone: customer.phone,
+            status: customer.status,
+            createdAt: customer.createdAt,
+        }
     }
 
     async logout(userId: string) {
@@ -274,8 +286,8 @@ export class AuthService {
         });
     }
 
-    private async generateTokens(userId: string, email: string, role: UserRole) {
-        const payload = { sub: userId, email, role };
+    private async generateTokens(userId: string, email: string, role: UserRole, storeId: string | null) {
+        const payload = { sub: userId, email, role, storeId };
 
         const [accessToken, refreshToken] = await Promise.all([
             this.jwtService.signAsync(payload, {

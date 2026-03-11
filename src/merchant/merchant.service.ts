@@ -49,6 +49,60 @@ export class MerchantService {
     };
   }
 
+  async getCustomers(userId: string, params: { search?: string; status?: string; page?: number; limit?: number }) {
+    const merchant = await this.prisma.merchant.findUnique({ where: { userId }, include: { store: true } });
+    if (!merchant || !merchant.store) throw new NotFoundException('Store not found');
+
+    const page = params.page && params.page > 0 ? params.page : 1;
+    const limit = params.limit && params.limit > 0 ? params.limit : 20;
+    const skip = (page - 1) * limit;
+
+    const where: any = { storeId: merchant.store.id };
+    if (params.status) where.status = params.status;
+    if (params.search) {
+      where.OR = [
+        { fullName: { contains: params.search, mode: 'insensitive' } },
+        { user: { email: { contains: params.search, mode: 'insensitive' } } },
+      ];
+    }
+
+    const [total, customers] = await Promise.all([
+      this.prisma.customer.count({ where }),
+      this.prisma.customer.findMany({
+        where,
+        include: { user: true },
+        skip,
+        take: limit,
+        orderBy: { createdAt: 'desc' },
+      }),
+    ]);
+
+    const items = customers.map((c) => ({
+      id: c.id,
+      fullName: c.fullName,
+      email: (c.user as any)?.email ?? null,
+      phone: c.phone,
+      status: c.status,
+      createdAt: c.createdAt,
+      ordersCount: 0,
+      totalSpent: 0,
+    }));
+
+    return { total, page, limit, items };
+  }
+
+  async updateCustomerStatus(userId: string, customerId: string, status: 'ACTIVE' | 'BANNED') {
+    const merchant = await this.prisma.merchant.findUnique({ where: { userId }, include: { store: true } });
+    if (!merchant || !merchant.store) throw new NotFoundException('Store not found');
+
+    // ensure customer belongs to the merchant's store
+    const existing = await this.prisma.customer.findUnique({ where: { id: customerId } });
+    if (!existing || existing.storeId !== merchant.store.id) throw new NotFoundException('Customer not found');
+
+    const updated = await this.prisma.customer.update({ where: { id: customerId }, data: { status } as any });
+    return { id: updated.id, status: updated.status };
+  }
+
   async updateStoreCustomization(userId: string, dto: any) {
     const merchant = await this.prisma.merchant.findUnique({
       where: { userId },

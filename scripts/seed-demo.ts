@@ -9,7 +9,7 @@ async function main() {
 
   // Superadmin
   const superEmail = 'superadmin@example.com';
-  const existingSuper = await prisma.user.findUnique({ where: { email: superEmail } });
+  const existingSuper = await prisma.user.findFirst({ where: { email: superEmail } });
   if (!existingSuper) {
     const superUser = await prisma.user.create({
       data: {
@@ -28,7 +28,7 @@ async function main() {
   const merchantStoreName = 'Demo Store';
   const merchantStoreSlug = 'demo-store';
 
-  let merchant = await prisma.user.findUnique({ where: { email: merchantEmail } });
+  let merchant = await prisma.user.findFirst({ where: { email: merchantEmail } });
   if (!merchant) {
     merchant = await prisma.user.create({
       data: {
@@ -75,7 +75,7 @@ async function main() {
 
   // Customer linked to the merchant's store
   const customerEmail = 'customer@example.com';
-  let customer = await prisma.user.findUnique({ where: { email: customerEmail } });
+  let customer = await prisma.user.findFirst({ where: { email: customerEmail } });
   if (!customer) {
     customer = await prisma.user.create({
       data: {

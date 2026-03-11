@@ -81,7 +81,11 @@ export class AuthController {
 
     @UseGuards(JwtAuthGuard)
     @Get('me')
-    getMe(@CurrentUser() user: any) {
-        return user;
+    async getMe(@CurrentUser() user: any) {
+        if (user?.role === 'CUSTOMER') {
+            const profile = await this.authService.getCustomerProfile(user.id, user.storeId ?? null)
+            return { ...user, customer: profile }
+        }
+        return user
     }
 }

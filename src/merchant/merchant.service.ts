@@ -1,9 +1,63 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { PaymentRegistry } from '../payments/payment.registry';
+
+import { OrderStatus } from '@prisma/client';
 
 @Injectable()
 export class MerchantService {
   constructor(private prisma: PrismaService) { }
+
+  async getPaymentSettings(userId: string, registry: PaymentRegistry) {
+    const merchant = await this.prisma.merchant.findUnique({ where: { userId }, include: { store: true } });
+    if (!merchant || !merchant.store) throw new NotFoundException('Store not found');
+    const enabled = merchant.store.enabledPaymentMethods || [];
+    const available = registry.getAll().map(g => ({ key: (g as any).key, name: (g as any).name }));
+    return { enabledMethods: enabled, available };
+  }
+
+  async updatePaymentSettings(userId: string, enabledMethods: string[]) {
+    const merchant = await this.prisma.merchant.findUnique({ where: { userId }, include: { store: true } });
+    if (!merchant || !merchant.store) throw new NotFoundException('Store not found');
+    const updated = await this.prisma.store.update({ where: { id: merchant.store.id }, data: { enabledPaymentMethods: enabledMethods } as any });
+    return { enabledMethods: updated.enabledPaymentMethods };
+  }
+
+  async getOrders(userId: string, params: { status?: string; page?: number; limit?: number; search?: string }) {
+    const merchant = await this.prisma.merchant.findUnique({ where: { userId }, include: { store: true } });
+    if (!merchant || !merchant.store) throw new NotFoundException('Store not found');
+    const page = params.page && params.page > 0 ? params.page : 1;
+    const limit = params.limit && params.limit > 0 ? params.limit : 20;
+    const skip = (page - 1) * limit;
+
+    const where: any = { storeId: merchant.store.id };
+    if (params.status) where.status = params.status;
+    if (params.search) where.orderCode = { contains: params.search, mode: 'insensitive' };
+
+    const [total, items] = await Promise.all([
+      this.prisma.order.count({ where }),
+      this.prisma.order.findMany({ where, include: { items: true }, skip, take: limit, orderBy: { createdAt: 'desc' } }),
+    ]);
+
+    return { total, page, limit, items };
+  }
+
+  async getOrderByCode(userId: string, orderCode: string) {
+    const merchant = await this.prisma.merchant.findUnique({ where: { userId }, include: { store: true } });
+    if (!merchant || !merchant.store) throw new NotFoundException('Store not found');
+    const order = await this.prisma.order.findFirst({ where: { orderCode, storeId: merchant.store.id }, include: { items: true } });
+    if (!order) throw new NotFoundException('Order not found');
+    return order;
+  }
+
+  async updateOrderStatus(userId: string, orderCode: string, status: OrderStatus) {
+    const merchant = await this.prisma.merchant.findUnique({ where: { userId }, include: { store: true } });
+    if (!merchant || !merchant.store) throw new NotFoundException('Store not found');
+    const order = await this.prisma.order.findFirst({ where: { orderCode, storeId: merchant.store.id } });
+    if (!order) throw new NotFoundException('Order not found');
+    const updated = await this.prisma.order.update({ where: { id: order.id }, data: { status } as any });
+    return updated;
+  }
 
   async getMyStore(userId: string) {
     const merchant = await this.prisma.merchant.findUnique({

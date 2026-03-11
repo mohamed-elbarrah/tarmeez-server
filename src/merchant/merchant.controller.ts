@@ -7,13 +7,15 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import { extname } from 'path';
 import * as fs from 'fs';
+import { PaymentRegistry } from '../payments/payment.registry';
+import { OrdersService } from '../orders/orders.service';
 
 type JwtUser = { id: string; email?: string; role?: string };
 
 @UseGuards(MerchantGuard)
 @Controller('merchant')
 export class MerchantController {
-  constructor(private svc: MerchantService) { }
+  constructor(private svc: MerchantService, private registry: PaymentRegistry, private ordersSvc: OrdersService) { }
 
   @Get('customers')
   async getCustomers(
@@ -85,5 +87,41 @@ export class MerchantController {
     const baseUrl = process.env.SERVER_URL ?? 'http://localhost:8000';
     const url = `${baseUrl}/uploads/stores/${user.id}/${file.filename}`;
     return { url };
+  }
+
+  @Get('store/payment-methods')
+  async getPaymentMethods(@CurrentUser() user: JwtUser) {
+    return this.svc.getPaymentSettings(user.id, this.registry)
+  }
+
+  @Patch('store/payment-methods')
+  async updatePaymentMethods(@CurrentUser() user: JwtUser, @Body() body: { enabledMethods: string[] }) {
+    // validate keys exist
+    const available = this.registry.getAll().map(g => (g as any).key)
+    for (const k of body.enabledMethods) {
+      if (!available.includes(k)) throw new BadRequestException(`Payment gateway ${k} not found`)
+    }
+    return this.svc.updatePaymentSettings(user.id, body.enabledMethods)
+  }
+
+  @Get('orders')
+  async getOrders(
+    @CurrentUser() user: JwtUser,
+    @Query('status') status?: string,
+    @Query('page') page = '1',
+    @Query('limit') limit = '20',
+    @Query('search') search?: string,
+  ) {
+    return this.svc.getOrders(user.id, { status, page: parseInt(page, 10), limit: parseInt(limit, 10), search })
+  }
+
+  @Get('orders/:orderCode')
+  async getOrderDetail(@CurrentUser() user: JwtUser, @Param('orderCode') orderCode: string) {
+    return this.svc.getOrderByCode(user.id, orderCode)
+  }
+
+  @Patch('orders/:orderCode/status')
+  async updateOrderStatus(@CurrentUser() user: JwtUser, @Param('orderCode') orderCode: string, @Body() body: { status: any }) {
+    return this.svc.updateOrderStatus(user.id, orderCode, body.status)
   }
 }

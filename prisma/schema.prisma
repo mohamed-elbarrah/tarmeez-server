@@ -90,12 +90,70 @@ model Store {
   accentColor    String?
   fontFamily     String?
   borderRadius   String?
+  enabledPaymentMethods String[] @default(["cash_on_delivery"])
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
   customers Customer[]
   users     User[]
   products  Product[]
+  orders    Order[]
+}
+
+model Order {
+  id              String      @id @default(uuid())
+  orderCode       String      @unique
+  storeId         String
+  store           Store       @relation(fields: [storeId], references: [id])
+
+  customerName    String
+  customerEmail   String?
+  customerPhone   String
+
+  shippingAddress Json
+
+  paymentMethod   String
+  paymentStatus   PaymentStatus @default(PENDING)
+  transactionId   String?
+
+  subtotal        Decimal
+  shippingCost    Decimal     @default(0)
+  total           Decimal
+  notes           String?
+  status          OrderStatus @default(PENDING)
+
+  items           OrderItem[]
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+}
+
+model OrderItem {
+  id          String  @id @default(uuid())
+  orderId     String
+  order       Order   @relation(fields: [orderId], references: [id])
+  productId   String
+  productName String
+  productImage String?
+  price       Decimal
+  quantity    Int
+  total       Decimal
+}
+
+enum OrderStatus {
+  PENDING
+  CONFIRMED
+  PROCESSING
+  SHIPPED
+  DELIVERED
+  CANCELLED
+  REFUNDED
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  FAILED
+  REFUNDED
 }
 
 model Product {

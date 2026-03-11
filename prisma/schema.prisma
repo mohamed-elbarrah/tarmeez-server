@@ -137,6 +137,35 @@ model Customer {
   status    CustomerStatus @default(ACTIVE)
   createdAt DateTime       @default(now())
   updatedAt DateTime       @updatedAt
+  addresses     Address[]
+  paymentMethods PaymentMethod[]
 
   @@unique([storeId, userId])
+}
+
+model Address {
+  id         String   @id @default(uuid())
+  customerId String
+  customer   Customer @relation(fields: [customerId], references: [id])
+  fullName   String
+  phone      String
+  city       String
+  region     String
+  street     String
+  buildingNo String?
+  isDefault  Boolean  @default(false)
+  createdAt  DateTime @default(now())
+}
+
+model PaymentMethod {
+  id           String   @id @default(uuid())
+  customerId   String
+  customer     Customer @relation(fields: [customerId], references: [id])
+  type         String
+  last4        String
+  expiryMonth  Int
+  expiryYear   Int
+  holderName   String
+  isDefault    Boolean  @default(false)
+  createdAt    DateTime @default(now())
 }

@@ -5,6 +5,7 @@ import { AppService } from './app.service';
 import { PrismaModule } from './prisma/prisma.module';
 import { AuthModule } from './auth/auth.module';
 import { SuperadminModule } from './superadmin/superadmin.module';
+import { CustomerModule } from './customer/customer.module';
 import { MerchantModule } from './merchant/merchant.module';
 import { ProductsModule } from './products/products.module';
 import { StoresModule } from './stores/stores.module';
@@ -14,6 +15,7 @@ import { StoresModule } from './stores/stores.module';
     ConfigModule.forRoot({ isGlobal: true }),
     PrismaModule,
     AuthModule,
+    CustomerModule,
     SuperadminModule,
     MerchantModule,
     ProductsModule,

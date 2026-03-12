@@ -34,12 +34,35 @@ export class MerchantService {
     if (params.status) where.status = params.status;
     if (params.search) where.orderCode = { contains: params.search, mode: 'insensitive' };
 
-    const [total, items] = await Promise.all([
-      this.prisma.order.count({ where }),
-      this.prisma.order.findMany({ where, include: { items: true }, skip, take: limit, orderBy: { createdAt: 'desc' } }),
+    const [[total, items], stats] = await Promise.all([
+      Promise.all([
+        this.prisma.order.count({ where }),
+        this.prisma.order.findMany({ where, include: { items: true }, skip, take: limit, orderBy: { createdAt: 'desc' } }),
+      ]),
+      this.prisma.order.groupBy({
+        by: ['status'],
+        where: { storeId: merchant.store.id },
+        _count: true,
+      }),
     ]);
 
-    return { total, page, limit, items };
+    const statsMap = stats.reduce((acc, s) => {
+      acc[s.status] = s._count;
+      return acc;
+    }, {} as Record<string, number>);
+
+    return { 
+      total, 
+      page, 
+      limit, 
+      items,
+      stats: {
+        total: total,
+        processing: (statsMap['PENDING'] || 0) + (statsMap['PROCESSING'] || 0),
+        shipping: statsMap['SHIPPED'] || 0,
+        completed: statsMap['DELIVERED'] || 0,
+      }
+    };
   }
 
   async getOrderByCode(userId: string, orderCode: string) {

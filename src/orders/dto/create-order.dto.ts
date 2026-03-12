@@ -2,12 +2,10 @@ import { Type } from 'class-transformer'
 import { IsArray, IsEmail, IsInt, IsNotEmpty, IsOptional, IsString, Min, ValidateNested } from 'class-validator'
 
 class ShippingAddressDto {
-  @IsString() @IsNotEmpty() fullName: string
-  @IsString() @IsNotEmpty() phone: string
   @IsString() @IsNotEmpty() city: string
   @IsString() @IsNotEmpty() region: string
   @IsString() @IsNotEmpty() street: string
-  @IsOptional() @IsString() buildingNo?: string
+  @IsOptional() @IsString() building?: string
 }
 
 class OrderItemDto {

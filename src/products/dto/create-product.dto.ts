@@ -1,4 +1,5 @@
-import { IsString, IsNotEmpty, IsNumber, Min, IsOptional, IsBoolean, IsArray, IsEnum } from 'class-validator';
+import { IsString, IsNotEmpty, IsNumber, Min, IsOptional, IsBoolean, IsArray, IsEnum, ValidateNested } from 'class-validator';
+import { Type } from 'class-transformer';
 
 export enum ProductStatus {
   DRAFT = 'DRAFT',
@@ -80,4 +81,64 @@ export class CreateProductDto {
   @IsString()
   @IsOptional()
   seoDesc?: string;
+
+  @IsArray()
+  @IsOptional()
+  @ValidateNested({ each: true })
+  @Type(() => CreateProductOptionDto)
+  options?: CreateProductOptionDto[];
+
+  @IsArray()
+  @IsOptional()
+  @ValidateNested({ each: true })
+  @Type(() => CreateProductVariantDto)
+  variants?: CreateProductVariantDto[];
+}
+
+export class CreateProductOptionDto {
+  @IsString()
+  @IsNotEmpty()
+  name: string;
+
+  @IsString()
+  @IsOptional()
+  type?: string;
+
+  @IsNumber()
+  @IsOptional()
+  position?: number;
+
+  @IsArray()
+  @IsString({ each: true })
+  values: string[];
+}
+
+export class CreateProductVariantDto {
+  @IsString()
+  @IsOptional()
+  sku?: string;
+
+  @IsNumber()
+  @IsOptional()
+  price?: number;
+
+  @IsNumber()
+  @IsOptional()
+  comparePrice?: number;
+
+  @IsNumber()
+  @IsOptional()
+  quantity?: number;
+
+  @IsString()
+  @IsOptional()
+  image?: string;
+
+  @IsBoolean()
+  @IsOptional()
+  isActive?: boolean;
+
+  @IsArray()
+  @IsString({ each: true })
+  optionValues: string[]; // This will map to specific values in order of options
 }

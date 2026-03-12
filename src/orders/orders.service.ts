@@ -11,100 +11,113 @@ export class OrdersService {
     private payments: PaymentRegistry,
   ) {}
 
-  async createOrder(dto: CreateOrderDto) {
-    // 1. find store
+  async createOrder(dto: CreateOrderDto, userId?: string) {
+    // 1. Find store by slug
     const store = await this.prisma.store.findUnique({ where: { slug: dto.storeSlug } })
-    if (!store) throw new NotFoundException('Store not found')
+    if (!store) throw new NotFoundException('المتجر غير موجود')
 
-    // 2. verify payment method enabled
+    // 2. Verify payment method is enabled for THIS store
     if (!store.enabledPaymentMethods.includes(dto.paymentMethod)) {
-      throw new BadRequestException('Payment method not enabled for this store')
+      throw new BadRequestException('طريقة الدفع غير متاحة في هذا المتجر')
     }
 
-    // 3. validate items and compute subtotal
-    let subtotal = 0
-    const itemsData = [] as any[]
+    // 3. If userId provided, find customer for THIS store
+    let customerId: string | null = null
+    if (userId) {
+      const customer = await this.prisma.customer.findFirst({ where: { userId, storeId: store.id } })
+      if (customer) customerId = customer.id
+    }
 
-    for (const it of dto.items) {
-      const product = await this.prisma.product.findUnique({ where: { id: it.productId } })
-      if (!product || product.storeId !== store.id || product.status !== 'ACTIVE') {
-        throw new BadRequestException(`Product ${it.productId} not available`)
+    // 4. Validate products belong to THIS store and compute subtotal
+    const orderItems: any[] = []
+    let subtotal = 0
+
+    for (const item of dto.items) {
+      const product = await this.prisma.product.findFirst({ where: { id: item.productId, storeId: store.id, status: 'ACTIVE' } })
+      if (!product) {
+        throw new BadRequestException(`المنتج ${item.productId} غير موجود`)
       }
-      if (product.trackStock && product.quantity < it.quantity) {
-        throw new BadRequestException(`Product ${product.name} out of stock`)
+      if (product.trackStock && product.quantity < item.quantity) {
+        throw new BadRequestException(`المنتج ${product.name} غير متوفر بالكمية المطلوبة`)
       }
-      const price = product.price
-      const total = price * it.quantity
-      subtotal += total
-      itemsData.push({ product, quantity: it.quantity, total })
+
+      const itemTotal = product.price * item.quantity
+      subtotal += itemTotal
+
+      orderItems.push({
+        productId: product.id,
+        productName: product.name,
+        productImage: product.images && product.images.length ? product.images[0] : null,
+        price: product.price,
+        quantity: item.quantity,
+        total: itemTotal,
+      })
     }
 
     const shippingCost = 0
     const total = subtotal + shippingCost
 
-    // 5. generate unique code
+    // 5. Generate unique order code
     const orderCode = await generateUniqueOrderCode(this.prisma as any)
 
-    // 6. process payment
+    // 6. Process payment
     const gateway = this.payments.get(dto.paymentMethod)
     const paymentResult = await gateway.processPayment({
       orderId: orderCode,
       amount: total,
       currency: 'SAR',
-      customer: { name: dto.customerName, email: dto.customerEmail, phone: dto.customerPhone },
+      customer: {
+        name: dto.customerName,
+        phone: dto.customerPhone,
+        email: dto.customerEmail,
+      },
     })
+
     if (!paymentResult.success) {
-      throw new HttpException(paymentResult.error || 'Payment failed', 402)
+      throw new HttpException('فشلت عملية الدفع', 402)
     }
 
-    // 7. create order in transaction
-    const created = await this.prisma.$transaction(async (tx) => {
-      const order = await tx.order.create({
+    // 7. Create order + items + update stock in ONE transaction
+    const order = await this.prisma.$transaction(async (tx) => {
+      const newOrder = await tx.order.create({
         data: {
           orderCode,
           storeId: store.id,
+          customerId,
           customerName: dto.customerName,
-          customerEmail: dto.customerEmail,
           customerPhone: dto.customerPhone,
-          shippingAddress: dto.shippingAddress as any,
+          customerEmail: dto.customerEmail,
+          shippingCity: dto.shippingAddress.city,
+          shippingRegion: dto.shippingAddress.region,
+          shippingStreet: dto.shippingAddress.street,
+          shippingBuilding: dto.shippingAddress.building,
           paymentMethod: dto.paymentMethod,
-          paymentStatus: paymentResult.success ? 'PAID' : 'PENDING',
+          paymentStatus: 'PENDING',
           transactionId: paymentResult.transactionId,
           subtotal: subtotal as any,
           shippingCost: shippingCost as any,
           total: total as any,
           notes: dto.notes,
+          status: 'PENDING',
+          items: {
+            create: orderItems
+          }
         },
+        include: { items: true }
       })
 
-      for (const it of itemsData) {
-        await tx.orderItem.create({
-          data: {
-            orderId: order.id,
-            productId: it.product.id,
-            productName: it.product.name,
-            productImage: it.product.images && it.product.images.length ? it.product.images[0] : null,
-            price: it.product.price as any,
-            quantity: it.quantity,
-            total: it.total as any,
-          },
+      // Decrement stock for tracked products
+      for (const item of dto.items) {
+        await tx.product.updateMany({
+          where: { id: item.productId, trackStock: true },
+          data: { quantity: { decrement: item.quantity } }
         })
-
-        if (it.product.trackStock) {
-          await tx.product.update({ where: { id: it.product.id }, data: { quantity: it.product.quantity - it.quantity } })
-        }
       }
 
-      return order
+      return newOrder
     })
 
-    return {
-      orderCode: created.orderCode,
-      total: Number(created.total),
-      status: created.status,
-      paymentMethod: created.paymentMethod,
-      estimatedDelivery: '3-5 أيام عمل',
-    }
+    return order
   }
 
   async getOrderByCode(orderCode: string, storeSlug: string) {

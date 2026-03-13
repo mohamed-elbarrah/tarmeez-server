@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException, BadRequestException, ConflictException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { MerchantStatus, Prisma } from '@prisma/client';
+import { seedStoreData } from '../prisma/seed-store';
 
 @Injectable()
 export class SuperadminService {
@@ -59,6 +60,9 @@ export class SuperadminService {
             isOnboarded: false,
           },
         });
+
+        // Seed with data
+        await seedStoreData(tx, store.id);
 
         return { merchant: updated, store };
       });

@@ -11,6 +11,8 @@ import { ProductsModule } from './products/products.module';
 import { StoresModule } from './stores/stores.module';
 import { PaymentsModule } from './payments/payments.module';
 import { OrdersModule } from './orders/orders.module';
+import { ReviewsModule } from './reviews/reviews.module';
+import { CategoriesModule } from './categories/categories.module';
 import { ThrottlerModule } from '@nestjs/throttler';
 
 @Module({
@@ -25,6 +27,8 @@ import { ThrottlerModule } from '@nestjs/throttler';
     StoresModule,
     PaymentsModule,
     OrdersModule,
+    ReviewsModule,
+    CategoriesModule,
     ThrottlerModule.forRoot({ ttl: 60, limit: 5 }),
   ],
   controllers: [AppController],

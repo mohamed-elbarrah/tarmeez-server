@@ -94,10 +94,13 @@ model Store {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  customers Customer[]
-  users     User[]
-  products  Product[]
-  orders    Order[]
+  customers  Customer[]
+  users      User[]
+  products   Product[]
+  orders     Order[]
+  reviews    Review[]
+  wishlists  Wishlist[]
+  categories Category[]
 }
 
 model Order {
@@ -165,6 +168,22 @@ enum PaymentStatus {
   REFUNDED
 }
 
+model Category {
+  id        String   @id @default(uuid())
+  storeId   String
+  store     Store    @relation(fields: [storeId], references: [id])
+  name      String
+  slug      String
+  image     String?
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  products  Product[]
+
+  @@unique([storeId, slug])
+}
+
 model Product {
   id           String        @id @default(uuid())
   storeId      String
@@ -181,6 +200,8 @@ model Product {
   weight       Float?
   isPhysical   Boolean       @default(true)
   category     String?
+  categoryId   String?
+  categoryRef  Category?     @relation(fields: [categoryId], references: [id])
   tags         String[]
   images       String[]
   slug         String
@@ -189,64 +210,14 @@ model Product {
   seoDesc      String?
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
-  
+
+  reviews      Review[]
+  offers       ProductOffer[]
+  wishlists    Wishlist[]
   options      ProductOption[]
   variants     ProductVariant[]
 
   @@unique([storeId, slug])
-}
-
-model ProductOption {
-  id        String   @id @default(uuid())
-  productId String
-  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
-  name      String
-  type      String   @default("DROPDOWN") // DROPDOWN, BUTTONS, COLORS, IMAGES
-  position  Int      @default(0)
-  values    ProductOptionValue[]
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-}
-
-model ProductOptionValue {
-  id       String        @id @default(uuid())
-  optionId String
-  option   ProductOption @relation(fields: [optionId], references: [id], onDelete: Cascade)
-  value    String
-  position Int           @default(0)
-  
-  variantValues ProductVariantValue[]
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-}
-
-model ProductVariant {
-  id           String   @id @default(uuid())
-  productId    String
-  product      Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
-  sku          String?
-  price        Float?
-  comparePrice Float?
-  quantity     Int      @default(0)
-  image        String?
-  isActive     Boolean  @default(true)
-  
-  optionValues ProductVariantValue[]
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-}
-
-model ProductVariantValue {
-  id        String   @id @default(uuid())
-  variantId String
-  variant   ProductVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
-  optionValueId String
-  optionValue   ProductOptionValue @relation(fields: [optionValueId], references: [id], onDelete: Cascade)
-
-  @@unique([variantId, optionValueId])
 }
 
 model Customer {
@@ -263,6 +234,8 @@ model Customer {
   addresses     Address[]
   paymentMethods PaymentMethod[]
   orders        Order[]
+  reviews       Review[]
+  wishlists     Wishlist[]
 
   @@unique([storeId, userId])
 }
@@ -292,4 +265,93 @@ model PaymentMethod {
   holderName   String
   isDefault    Boolean  @default(false)
   createdAt    DateTime @default(now())
+}
+
+model Review {
+  id          String   @id @default(uuid())
+  storeId     String
+  store       Store    @relation(fields: [storeId], references: [id])
+  productId   String
+  product     Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  customerId  String
+  customer    Customer @relation(fields: [customerId], references: [id])
+  rating      Int
+  comment     String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([customerId, productId])
+}
+
+model ProductOffer {
+  id          String   @id @default(uuid())
+  productId   String
+  product     Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  title       String
+  description String?
+  quantity    Int
+  price       Decimal
+  badge       String?
+  sortOrder   Int      @default(0)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+}
+
+model Wishlist {
+  id          String   @id @default(uuid())
+  storeId     String
+  store       Store    @relation(fields: [storeId], references: [id])
+  customerId  String
+  customer    Customer @relation(fields: [customerId], references: [id])
+  productId   String
+  product     Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+
+  @@unique([customerId, productId])
+}
+
+model ProductOption {
+  id        String               @id @default(uuid())
+  productId String
+  product   Product              @relation(fields: [productId], references: [id], onDelete: Cascade)
+  name      String
+  type      String               @default("DROPDOWN")
+  position  Int                  @default(0)
+  values    ProductOptionValue[]
+  createdAt DateTime             @default(now())
+  updatedAt DateTime             @updatedAt
+}
+
+model ProductOptionValue {
+  id            String                @id @default(uuid())
+  optionId      String
+  option        ProductOption         @relation(fields: [optionId], references: [id], onDelete: Cascade)
+  value         String
+  position      Int                   @default(0)
+  variantValues ProductVariantValue[]
+}
+
+model ProductVariant {
+  id           String                @id @default(uuid())
+  productId    String
+  product      Product               @relation(fields: [productId], references: [id], onDelete: Cascade)
+  sku          String?
+  price        Float?
+  comparePrice Float?
+  quantity     Int                   @default(0)
+  image        String?
+  isActive     Boolean               @default(true)
+  optionValues ProductVariantValue[]
+  createdAt    DateTime              @default(now())
+  updatedAt    DateTime              @updatedAt
+}
+
+model ProductVariantValue {
+  id            String             @id @default(uuid())
+  variantId     String
+  variant       ProductVariant     @relation(fields: [variantId], references: [id], onDelete: Cascade)
+  optionValueId String
+  optionValue   ProductOptionValue @relation(fields: [optionValueId], references: [id], onDelete: Cascade)
+
+  @@unique([variantId, optionValueId])
 }

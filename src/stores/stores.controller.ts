@@ -7,6 +7,11 @@ export class StoresController {
 
     @Get(':slug')
     async getStoreBySlug(@Param('slug') slug: string) {
-        return this.storesService.getStoreBySlug(slug);
+        return this.storesService.getStoreBySlug(decodeURIComponent(slug));
+    }
+
+    @Get(':storeId/products/:productIdOrSlug')
+    async getProduct(@Param('storeId') storeId: string, @Param('productIdOrSlug') productIdOrSlug: string) {
+        return this.storesService.getProduct(storeId, decodeURIComponent(productIdOrSlug));
     }
 }

@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { CustomerGuard } from '../auth/guards/customer.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { CustomerService } from './customer.service';
@@ -70,5 +70,16 @@ export class CustomerController {
   @Get('customer/orders')
   async getOrders(@CurrentUser() user: JwtUser) {
     return this.svc.getOrders(user);
+  }
+
+  /* Wishlist */
+  @Post('customer/wishlist')
+  async toggleWishlist(@CurrentUser() user: JwtUser, @Body() dto: { productId: string; storeSlug: string }) {
+    return this.svc.toggleWishlist(user, dto);
+  }
+
+  @Get('customer/wishlist')
+  async getWishlist(@CurrentUser() user: JwtUser, @Query('storeSlug') storeSlug: string) {
+    return this.svc.getWishlist(user, storeSlug);
   }
 }

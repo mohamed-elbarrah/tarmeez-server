@@ -2,6 +2,7 @@ import { Injectable, NotFoundException, ConflictException } from '@nestjs/common
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
+import { CreateOfferDto } from './dto/create-offer.dto';
 import { ProductStatus } from '@prisma/client';
 
 @Injectable()
@@ -235,5 +236,55 @@ export class ProductsService {
         });
 
         return { message: 'Product deleted' };
+    }
+
+    // ── Offers ──
+
+    async getOffers(storeId: string, productId: string) {
+        await this.getProductById(storeId, productId);
+        return this.prisma.productOffer.findMany({
+            where: { productId },
+            orderBy: { sortOrder: 'asc' },
+        });
+    }
+
+    async createOffer(storeId: string, productId: string, dto: CreateOfferDto) {
+        await this.getProductById(storeId, productId);
+        return this.prisma.productOffer.create({
+            data: {
+                productId,
+                title: dto.title,
+                description: dto.description,
+                quantity: dto.quantity,
+                price: dto.price,
+                badge: dto.badge,
+                sortOrder: dto.sortOrder,
+                isActive: dto.isActive,
+            },
+        });
+    }
+
+    async updateOffer(storeId: string, productId: string, offerId: string, dto: Partial<CreateOfferDto>) {
+        await this.getProductById(storeId, productId);
+        const offer = await this.prisma.productOffer.findFirst({
+            where: { id: offerId, productId },
+        });
+        if (!offer) throw new NotFoundException('Offer not found');
+
+        return this.prisma.productOffer.update({
+            where: { id: offerId },
+            data: dto,
+        });
+    }
+
+    async deleteOffer(storeId: string, productId: string, offerId: string) {
+        await this.getProductById(storeId, productId);
+        const offer = await this.prisma.productOffer.findFirst({
+            where: { id: offerId, productId },
+        });
+        if (!offer) throw new NotFoundException('Offer not found');
+
+        await this.prisma.productOffer.delete({ where: { id: offerId } });
+        return { message: 'Offer deleted' };
     }
 }

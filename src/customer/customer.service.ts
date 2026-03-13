@@ -102,4 +102,73 @@ export class CustomerService {
     // Orders module not implemented yet
     return [];
   }
+
+  /* Wishlist */
+  async toggleWishlist(user: any, dto: { productId: string; storeSlug: string }) {
+    const store = await this.prisma.store.findUnique({ where: { slug: dto.storeSlug } });
+    if (!store) throw new NotFoundException('Store not found');
+
+    const customer = await this.prisma.customer.findFirst({
+      where: { userId: user.id, storeId: store.id } as any,
+    });
+    if (!customer) throw new NotFoundException('Customer not found');
+
+    const product = await this.prisma.product.findFirst({
+      where: { id: dto.productId, storeId: store.id },
+    });
+    if (!product) throw new NotFoundException('Product not found in this store');
+
+    const existing = await this.prisma.wishlist.findUnique({
+      where: { customerId_productId: { customerId: customer.id, productId: dto.productId } },
+    });
+
+    if (existing) {
+      await this.prisma.wishlist.delete({ where: { id: existing.id } });
+      return { wishlisted: false };
+    }
+
+    await this.prisma.wishlist.create({
+      data: {
+        storeId: store.id,
+        customerId: customer.id,
+        productId: dto.productId,
+      },
+    });
+    return { wishlisted: true };
+  }
+
+  async getWishlist(user: any, storeSlug: string) {
+    const store = await this.prisma.store.findUnique({ where: { slug: storeSlug } });
+    if (!store) throw new NotFoundException('Store not found');
+
+    const customer = await this.prisma.customer.findFirst({
+      where: { userId: user.id, storeId: store.id } as any,
+    });
+    if (!customer) throw new NotFoundException('Customer not found');
+
+    const items = await this.prisma.wishlist.findMany({
+      where: { customerId: customer.id, storeId: store.id },
+      include: {
+        product: {
+          select: {
+            id: true,
+            name: true,
+            price: true,
+            comparePrice: true,
+            images: true,
+            slug: true,
+            category: true,
+          },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    return items.map((w) => ({
+      id: w.id,
+      productId: w.productId,
+      product: w.product,
+      createdAt: w.createdAt,
+    }));
+  }
 }

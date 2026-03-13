@@ -6,7 +6,7 @@ export class StoresService {
     constructor(private prisma: PrismaService) { }
 
     async getStoreBySlug(slug: string) {
-        const store = await this.prisma.store.findUnique({
+        const store = await (this.prisma.store as any).findUnique({
             where: { slug },
             include: {
                 merchant: {
@@ -21,7 +21,6 @@ export class StoresService {
                 products: {
                     where: { status: 'ACTIVE' },
                     orderBy: { createdAt: 'desc' },
-                    take: 8,
                     select: {
                         id: true,
                         name: true,
@@ -59,7 +58,7 @@ export class StoresService {
 
         // Compute average rating per product
         const productsWithRating: any[] = [];
-        for (const product of store.products) {
+        for (const product of (store as any).products) {
             const avg = await this.prisma.review.aggregate({
                 where: { productId: product.id },
                 _avg: { rating: true },
@@ -72,7 +71,7 @@ export class StoresService {
             });
         }
 
-        const s: any = store as any;
+        const s: any = store;
 
         // Map store and ensure brand identity fields are included in response
         return {
@@ -104,7 +103,7 @@ export class StoresService {
     }
 
     async getProduct(storeId: string, productIdOrSlug: string) {
-        const product = await this.prisma.product.findFirst({
+        const product = await (this.prisma.product as any).findFirst({
             where: {
                 storeId,
                 OR: [

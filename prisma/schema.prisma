@@ -30,6 +30,18 @@ enum CustomerStatus {
   BANNED
 }
 
+enum PageType {
+  LANDING
+  CUSTOM
+  POLICY
+}
+
+enum PageStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
 model User {
   id           String   @id @default(uuid())
   email        String
@@ -101,6 +113,7 @@ model Store {
   reviews    Review[]
   wishlists  Wishlist[]
   categories Category[]
+  pages      Page[]
 }
 
 model Order {
@@ -216,6 +229,29 @@ model Product {
   wishlists    Wishlist[]
   options      ProductOption[]
   variants     ProductVariant[]
+  pages        Page[]
+
+  @@unique([storeId, slug])
+}
+
+model Page {
+  id              String      @id @default(uuid())
+  storeId         String
+  store           Store       @relation(fields: [storeId], references: [id])
+  title           String
+  slug            String
+  type            PageType
+  status          PageStatus  @default(DRAFT)
+  content         Json        @default("{}")
+  showHeader      Boolean     @default(false)
+  showFooter      Boolean     @default(false)
+  linkedProductId String?
+  linkedProduct   Product?    @relation(fields: [linkedProductId], references: [id])
+  seoTitle        String?
+  seoDescription  String?
+  version         Int         @default(1)
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
 
   @@unique([storeId, slug])
 }

@@ -322,4 +322,24 @@ export class AuthService {
         res.clearCookie('access_token');
         res.clearCookie('refresh_token');
     }
+
+    setCustomerTokenCookies(res: Response, accessToken: string, refreshToken: string) {
+        res.cookie('customer_access_token', accessToken, {
+            httpOnly: true,
+            secure: true,
+            sameSite: 'strict',
+            maxAge: 15 * 60 * 1000, // 15m
+        });
+        res.cookie('customer_refresh_token', refreshToken, {
+            httpOnly: true,
+            secure: true,
+            sameSite: 'strict',
+            maxAge: 7 * 24 * 60 * 60 * 1000, // 7d
+        });
+    }
+
+    clearCustomerTokenCookies(res: Response) {
+        res.clearCookie('customer_access_token');
+        res.clearCookie('customer_refresh_token');
+    }
 }

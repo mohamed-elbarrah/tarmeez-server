@@ -99,8 +99,38 @@ export class CustomerService {
   }
 
   async getOrders(user: any) {
-    // Orders module not implemented yet
-    return [];
+    const customer = await this.findCustomerByUser(user.id, user.storeId);
+    const orders = await this.prisma.order.findMany({
+      where: { customerId: customer.id },
+      include: { items: true },
+      orderBy: { createdAt: 'desc' },
+    });
+    return orders.map((o) => ({
+      id: o.id,
+      orderCode: o.orderCode,
+      status: o.status,
+      paymentMethod: o.paymentMethod,
+      paymentStatus: o.paymentStatus,
+      customerName: o.customerName,
+      subtotal: Number(o.subtotal),
+      shippingCost: Number(o.shippingCost),
+      total: Number(o.total),
+      createdAt: o.createdAt,
+      shippingAddress: {
+        city: o.shippingCity,
+        region: o.shippingRegion,
+        street: o.shippingStreet,
+        building: o.shippingBuilding,
+      },
+      items: o.items.map((i) => ({
+        productId: i.productId,
+        productName: i.productName,
+        productImage: i.productImage,
+        price: Number(i.price),
+        quantity: i.quantity,
+        total: Number(i.total),
+      })),
+    }));
   }
 
   /* Wishlist */

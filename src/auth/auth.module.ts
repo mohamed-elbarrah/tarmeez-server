@@ -19,6 +19,6 @@ import { CustomerGuard } from './guards/customer.guard';
         JwtRefreshStrategy,
         CustomerGuard,
     ],
-    exports: [AuthService],
+    exports: [AuthService, CustomerGuard, JwtModule],
 })
 export class AuthModule { }

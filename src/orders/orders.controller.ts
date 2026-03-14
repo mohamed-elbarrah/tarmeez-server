@@ -3,20 +3,27 @@ import { OrdersService } from './orders.service'
 import { CreateOrderDto } from './dto/create-order.dto'
 import { ThrottlerGuard } from '@nestjs/throttler'
 import { JwtService } from '@nestjs/jwt'
+import { ConfigService } from '@nestjs/config'
 import type { Request } from 'express'
 
 @Controller('orders')
 export class OrdersController {
-  constructor(private orders: OrdersService, private jwtService: JwtService) {}
+  constructor(
+    private orders: OrdersService,
+    private jwtService: JwtService,
+    private configService: ConfigService,
+  ) {}
 
   @UseGuards(ThrottlerGuard)
   @Post()
   async create(@Body() dto: CreateOrderDto, @Req() req: Request) {
     let userId: string | undefined
     try {
-      const token = (req as any).cookies?.access_token
+      const token = (req as any).cookies?.customer_access_token || (req as any).cookies?.access_token
       if (token) {
-        const payload = this.jwtService.verify(token)
+        const payload = this.jwtService.verify(token, {
+          secret: this.configService.get<string>('JWT_ACCESS_SECRET'),
+        })
         userId = payload.sub
       }
     } catch {

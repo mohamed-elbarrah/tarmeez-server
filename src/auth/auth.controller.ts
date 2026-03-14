@@ -6,9 +6,12 @@ import {
     UseGuards,
     Get,
     Req,
+    UnauthorizedException,
 } from '@nestjs/common';
 import type { Response, Request } from 'express';
 import { AuthService } from './auth.service';
+import { JwtService } from '@nestjs/jwt';
+import { ConfigService } from '@nestjs/config';
 import * as PlatformLogin from './dto/platform-login.dto';
 import * as MerchantRegister from './dto/merchant-register.dto';
 import * as CustomerLogin from './dto/customer-login.dto';
@@ -19,7 +22,11 @@ import { CurrentUser } from './decorators/current-user.decorator';
 
 @Controller('auth')
 export class AuthController {
-    constructor(private authService: AuthService) { }
+    constructor(
+        private authService: AuthService,
+        private jwtService: JwtService,
+        private configService: ConfigService,
+    ) { }
 
     @Post('platform/login')
     async platformLogin(
@@ -43,7 +50,7 @@ export class AuthController {
         @Res({ passthrough: true }) res: Response,
     ) {
         const result = await this.authService.customerLogin(dto);
-        this.authService.setTokenCookies(res, result.accessToken, result.refreshToken);
+        this.authService.setCustomerTokenCookies(res, result.accessToken, result.refreshToken);
         return { user: result.user };
     }
 
@@ -53,7 +60,7 @@ export class AuthController {
         @Res({ passthrough: true }) res: Response,
     ) {
         const result = await this.authService.customerRegister(dto);
-        this.authService.setTokenCookies(res, result.accessToken, result.refreshToken);
+        this.authService.setCustomerTokenCookies(res, result.accessToken, result.refreshToken);
         return { user: result.user };
     }
 
@@ -77,6 +84,49 @@ export class AuthController {
         await this.authService.logout(user.id);
         this.authService.clearTokenCookies(res);
         return { message: 'Logged out' };
+    }
+
+    @Post('customer/logout')
+    async customerLogout(
+        @Req() req: Request,
+        @Res({ passthrough: true }) res: Response,
+    ) {
+        const token = (req as any).cookies?.customer_access_token;
+        if (token) {
+            try {
+                const payload = this.jwtService.verify(token, {
+                    secret: this.configService.get<string>('JWT_ACCESS_SECRET'),
+                });
+                await this.authService.logout(payload.sub);
+            } catch {
+                // token invalid, just clear cookies
+            }
+        }
+        this.authService.clearCustomerTokenCookies(res);
+        return { message: 'Logged out' };
+    }
+
+    @Post('customer/refresh')
+    async customerRefresh(
+        @Req() req: Request,
+        @Res({ passthrough: true }) res: Response,
+    ) {
+        const refreshToken = (req as any).cookies?.customer_refresh_token;
+        if (!refreshToken) throw new UnauthorizedException();
+
+        let payload: any;
+        try {
+            payload = this.jwtService.verify(refreshToken, {
+                secret: this.configService.get<string>('JWT_REFRESH_SECRET'),
+            });
+        } catch {
+            this.authService.clearCustomerTokenCookies(res);
+            throw new UnauthorizedException();
+        }
+
+        const tokens = await this.authService.refreshTokens(payload.sub, refreshToken);
+        this.authService.setCustomerTokenCookies(res, tokens.accessToken, tokens.refreshToken);
+        return { message: 'Token refreshed' };
     }
 
     @UseGuards(JwtAuthGuard)

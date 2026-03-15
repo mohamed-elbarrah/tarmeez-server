@@ -32,4 +32,7 @@ export class CreatePageDto {
   @IsOptional()
   @IsString()
   seoDescription?: string;
+
+  @IsOptional()
+  content?: any;
 }

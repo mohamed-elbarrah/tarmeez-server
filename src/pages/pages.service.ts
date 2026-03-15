@@ -32,8 +32,22 @@ export class PagesService {
   async createPage(dto: CreatePageDto, userId: string) {
     const storeId = await this.getStoreIdByMerchant(userId);
 
-    if (dto.type === PageType.LANDING && !dto.linkedProductId) {
-      throw new BadRequestException('linkedProductId is required for LANDING pages');
+    if (dto.type === PageType.LANDING) {
+      if (!dto.linkedProductId) {
+        throw new BadRequestException('linkedProductId is required for LANDING pages');
+      }
+
+      // Verify product exists AND belongs to this store
+      const product = await this.prisma.product.findFirst({
+        where: {
+          id: dto.linkedProductId,
+          storeId,
+        },
+      });
+
+      if (!product) {
+        throw new BadRequestException('المنتج غير موجود أو لا ينتمي لمتجرك');
+      }
     }
 
     const slug = dto.slug || this.slugify(dto.title);
@@ -52,7 +66,7 @@ export class PagesService {
         storeId,
         slug,
         status: PageStatus.DRAFT,
-        content: {}, // Default empty Puck JSON
+        content: (dto.content as any) || { version: 1, puckData: { content: [], root: { props: {} } } },
       },
     });
   }
@@ -87,6 +101,18 @@ export class PagesService {
       });
       if (existing) {
         throw new ConflictException('Slug already exists for this store');
+      }
+    }
+
+    if (page.type === PageType.LANDING && dto.linkedProductId) {
+      const product = await this.prisma.product.findFirst({
+        where: {
+          id: dto.linkedProductId,
+          storeId,
+        },
+      });
+      if (!product) {
+        throw new BadRequestException('المنتج غير موجود أو لا ينتمي لمتجرك');
       }
     }
 

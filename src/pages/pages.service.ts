@@ -3,6 +3,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CreatePageDto } from './dto/create-page.dto';
 import { UpdatePageDto } from './dto/update-page.dto';
 import { UpdatePageStatusDto } from './dto/update-page-status.dto';
+import { generateSlug, sanitizeSlug } from '../utils/slug.util';
 import { PageStatus, PageType } from '@prisma/client';
 
 @Injectable()
@@ -20,14 +21,6 @@ export class PagesService {
     return merchant.store.id;
   }
 
-  private slugify(text: string): string {
-    return text
-      .toLowerCase()
-      .trim()
-      .replace(/\s+/g, '-')
-      .replace(/[^\u0600-\u06FFa-z0-9-]/g, '')
-      .replace(/-+/g, '-');
-  }
 
   async createPage(dto: CreatePageDto, userId: string) {
     const storeId = await this.getStoreIdByMerchant(userId);
@@ -50,7 +43,7 @@ export class PagesService {
       }
     }
 
-    const slug = dto.slug || this.slugify(dto.title);
+    const slug = dto.slug ? sanitizeSlug(dto.slug) : generateSlug(dto.title);
 
     // Ensure slug uniqueness per store
     const existing = await this.prisma.page.findUnique({
@@ -95,9 +88,11 @@ export class PagesService {
     const storeId = await this.getStoreIdByMerchant(userId);
     const page = await this.getPage(pageId, userId);
 
+    const slug = dto.slug ? sanitizeSlug(dto.slug) : page.slug;
+
     if (dto.slug && dto.slug !== page.slug) {
       const existing = await this.prisma.page.findUnique({
-        where: { storeId_slug: { storeId, slug: dto.slug } },
+        where: { storeId_slug: { storeId, slug } },
       });
       if (existing) {
         throw new ConflictException('Slug already exists for this store');
@@ -170,17 +165,24 @@ export class PagesService {
     return { message: 'Page deleted successfully' };
   }
 
-  async getPublicPage(pageSlug: string, storeSlug: string) {
+  async getPublicPage(storeSlug: string, pageSlug: string) {
     const store = await this.prisma.store.findUnique({
       where: { slug: storeSlug },
     });
-    if (!store) throw new NotFoundException('Store not found');
 
-    const page = await this.prisma.page.findUnique({
-      where: { storeId_slug: { storeId: store.id, slug: pageSlug } },
+    if (!store) {
+      throw new NotFoundException('Store not found');
+    }
+
+    const page = await this.prisma.page.findFirst({
+      where: {
+        slug: pageSlug,
+        storeId: store.id,
+        status: PageStatus.PUBLISHED,
+      },
     });
 
-    if (!page || page.status !== PageStatus.PUBLISHED) {
+    if (!page) {
       throw new NotFoundException('Page not found');
     }
 

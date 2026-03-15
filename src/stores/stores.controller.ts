@@ -21,6 +21,6 @@ export class StoresController {
 
     @Get(':slug/pages/:pageSlug')
     async getPublicPage(@Param('slug') slug: string, @Param('pageSlug') pageSlug: string) {
-        return this.pagesService.getPublicPage(decodeURIComponent(pageSlug), decodeURIComponent(slug));
+        return this.pagesService.getPublicPage(decodeURIComponent(slug), decodeURIComponent(pageSlug));
     }
 }

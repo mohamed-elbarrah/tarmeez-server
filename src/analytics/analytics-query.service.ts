@@ -143,13 +143,13 @@ export class AnalyticsQueryService {
       Array<{ page_slug: string; views: bigint; avg_duration: number | null }>
     >`
       SELECT
-        page_slug,
+        "pageSlug" as page_slug,
         COUNT(*) as views,
-        AVG(duration) as avg_duration
+        AVG("duration") as avg_duration
       FROM page_views
-      WHERE store_id = ${storeId}
+      WHERE "storeId" = ${storeId}
         AND time >= ${start}
-      GROUP BY page_slug
+      GROUP BY "pageSlug"
       ORDER BY views DESC
       LIMIT 20
     `
@@ -276,8 +276,8 @@ export class AnalyticsQueryService {
         ROUND(y::numeric, 0) as y,
         COUNT(*) as weight
       FROM heatmap_data
-      WHERE store_id = ${storeId}
-        AND page_slug = ${page}
+      WHERE "storeId" = ${storeId}
+        AND "pageSlug" = ${page}
         AND type::text = ${type}
         AND device::text = ${device}
         AND time >= NOW() - INTERVAL '30 days'

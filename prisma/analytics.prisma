@@ -1,0 +1,130 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../node_modules/@prisma/analytics-client"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("ANALYTICS_DATABASE_URL")
+}
+
+// ═══════════════════════════════════════════
+// ANALYTICS MODELS — SEPARATE DATABASE
+// TimescaleDB on port 5433
+// (ANALYTICS-RULE 1)
+// ═══════════════════════════════════════════
+
+enum DeviceType {
+  MOBILE
+  TABLET
+  DESKTOP
+  UNKNOWN
+}
+
+enum AnalyticsEventType {
+  CART_ADD
+  CART_REMOVE
+  CART_ABANDON
+  CHECKOUT_START
+  PRODUCT_VIEW
+  BUTTON_CLICK
+}
+
+enum HeatmapEventType {
+  CLICK
+  MOVE
+  SCROLL
+}
+
+model PageView {
+  id        String     @id @default(uuid())
+  time      DateTime   @default(now())
+  storeId   String
+  sessionId String
+  pageSlug  String
+  referrer  String?
+  device    DeviceType @default(UNKNOWN)
+  browser   String?
+  country   String?
+  city      String?
+  duration  Int?
+
+  @@index([storeId, time])
+  @@index([storeId, pageSlug, time])
+  @@map("page_views")
+}
+
+model AnalyticsEvent {
+  id        String             @id @default(uuid())
+  time      DateTime           @default(now())
+  storeId   String
+  sessionId String
+  type      AnalyticsEventType
+  pageSlug  String
+  metadata  Json?
+
+  @@index([storeId, time])
+  @@index([storeId, type, time])
+  @@map("analytics_events")
+}
+
+model HeatmapData {
+  id        String           @id @default(uuid())
+  time      DateTime         @default(now())
+  storeId   String
+  pageSlug  String
+  x         Float
+  y         Float
+  type      HeatmapEventType
+  device    DeviceType       @default(DESKTOP)
+
+  @@index([storeId, pageSlug, type, device])
+  @@index([storeId, time])
+  @@map("heatmap_data")
+}
+
+model AnalyticsHourly {
+  id             String   @id @default(uuid())
+  storeId        String
+  hour           DateTime
+  pageViews      Int      @default(0)
+  uniqueVisitors Int      @default(0)
+  avgDuration    Float    @default(0)
+  bounceRate     Float    @default(0)
+  mobileCount    Int      @default(0)
+  tabletCount    Int      @default(0)
+  desktopCount   Int      @default(0)
+  cartAdds       Int      @default(0)
+  cartAbandons   Int      @default(0)
+  checkoutStarts Int      @default(0)
+
+  @@unique([storeId, hour])
+  @@index([storeId, hour])
+  @@map("analytics_hourly")
+}
+
+model AnalyticsDaily {
+  id             String   @id @default(uuid())
+  storeId        String
+  date           DateTime
+  pageViews      Int      @default(0)
+  uniqueVisitors Int      @default(0)
+  avgDuration    Float    @default(0)
+  bounceRate     Float    @default(0)
+  mobileCount    Int      @default(0)
+  tabletCount    Int      @default(0)
+  desktopCount   Int      @default(0)
+  cartAdds       Int      @default(0)
+  cartAbandons   Int      @default(0)
+  checkoutStarts Int      @default(0)
+  organicCount   Int      @default(0)
+  socialCount    Int      @default(0)
+  directCount    Int      @default(0)
+  referralCount  Int      @default(0)
+  topPages       Json     @default("[]")
+  countries      Json     @default("[]")
+
+  @@unique([storeId, date])
+  @@index([storeId, date])
+  @@map("analytics_daily")
+}

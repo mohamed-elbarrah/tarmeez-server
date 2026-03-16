@@ -2,11 +2,14 @@ import { Injectable } from '@nestjs/common'
 import { AnalyticsPrismaService } from './analytics-prisma.service'
 import { PrismaService } from '../prisma/prisma.service'
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
 @Injectable()
 export class AnalyticsService {
-  // Store validation cache — 5 minute TTL (ANALYTICS-RULE 6)
+  // Store resolution cache — 5 minute TTL (ANALYTICS-RULE 6)
+  // Keys can be either UUID storeId or storeSlug; value is resolved storeId
   private storeCache = new Map<string, {
-    valid: boolean
+    storeId: string | null
     cachedAt: number
   }>()
 
@@ -16,19 +19,50 @@ export class AnalyticsService {
     // ↑ regular prisma for store validation only
   ) {}
 
-  async isValidStore(storeId: string): Promise<boolean> {
-    const cached = this.storeCache.get(storeId)
+  /**
+   * Resolve storeRef (UUID or slug) to the actual storeId UUID.
+   * Returns null for unknown stores.
+   * (ANALYTICS-RULE 6 — validates every incoming event)
+   */
+  async resolveStore(ref: string): Promise<string | null> {
+    const cached = this.storeCache.get(ref)
     const now = Date.now()
-    if (cached && now - cached.cachedAt < 300000) {
-      return cached.valid
+    if (cached !== undefined && now - cached.cachedAt < 300000) {
+      return cached.storeId
     }
-    const store = await this.prisma.store.findUnique({
-      where: { id: storeId },
-      select: { id: true },
-    })
-    const valid = !!store
-    this.storeCache.set(storeId, { valid, cachedAt: now })
-    return valid
+
+    let store: { id: string; slug: string } | null = null
+
+    // Try UUID lookup first (exact primary key hit)
+    if (UUID_RE.test(ref)) {
+      store = await this.prisma.store
+        .findUnique({ where: { id: ref }, select: { id: true, slug: true } })
+        .catch(() => null)
+    }
+
+    // Fall back to slug lookup
+    if (!store) {
+      store = await this.prisma.store
+        .findUnique({ where: { slug: ref }, select: { id: true, slug: true } })
+        .catch(() => null)
+    }
+
+    const storeId = store?.id ?? null
+
+    // Cache by the ref used AND by both id/slug for cross-lookup
+    const entry = { storeId, cachedAt: now }
+    this.storeCache.set(ref, entry)
+    if (store) {
+      if (store.id !== ref) this.storeCache.set(store.id, entry)
+      if (store.slug !== ref) this.storeCache.set(store.slug, entry)
+    }
+
+    return storeId
+  }
+
+  /** Backward-compat wrapper — prefer resolveStore() */
+  async isValidStore(ref: string): Promise<boolean> {
+    return (await this.resolveStore(ref)) !== null
   }
 
   async processBatch(events: any[]): Promise<void> {
@@ -37,7 +71,7 @@ export class AnalyticsService {
       e => e.type === 'click' || e.type === 'move',
     )
     const analyticsEvents = events.filter(e =>
-      ['cart_add', 'cart_abandon', 'checkout_start'].includes(e.type),
+      ['cart_add', 'cart_abandon', 'checkout_start', 'product_view'].includes(e.type),
     )
     const scrollEvents = events.filter(e => e.type === 'scroll')
 
@@ -130,6 +164,7 @@ export class AnalyticsService {
       cart_add: 'CART_ADD',
       cart_abandon: 'CART_ABANDON',
       checkout_start: 'CHECKOUT_START',
+      product_view: 'PRODUCT_VIEW',
     }
     return map[t] ?? 'BUTTON_CLICK'
   }

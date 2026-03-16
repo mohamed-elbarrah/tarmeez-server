@@ -9,7 +9,7 @@ import {
 export class CollectEventDto {
   @IsString()
   @IsNotEmpty()
-  storeId: string
+  storeRef: string  // accepts both storeId UUID and storeSlug
 
   @IsString()
   @IsNotEmpty()
@@ -25,6 +25,7 @@ export class CollectEventDto {
     'cart_add',
     'cart_abandon',
     'checkout_start',
+    'product_view',
   ])
   type: string
 

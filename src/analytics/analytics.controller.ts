@@ -5,9 +5,11 @@ import {
   HttpCode,
   Req,
   OnModuleDestroy,
+  ForbiddenException,
 } from '@nestjs/common'
 import { Throttle } from '@nestjs/throttler'
 import { AnalyticsService } from './analytics.service'
+import { AggregationService } from './aggregation.service'
 import { GeoService } from './geo.service'
 import { CollectEventDto } from './dto/collect-event.dto'
 
@@ -18,6 +20,7 @@ export class AnalyticsController implements OnModuleDestroy {
 
   constructor(
     private analyticsService: AnalyticsService,
+    private aggregationService: AggregationService,
     private geoService: GeoService,
   ) {
     // Flush buffer every 10 seconds (ANALYTICS-RULE 3)
@@ -37,9 +40,9 @@ export class AnalyticsController implements OnModuleDestroy {
     @Body() dto: CollectEventDto,
     @Req() req: any,
   ) {
-    // Validate storeId before accepting data (ANALYTICS-RULE 6)
-    const valid = await this.analyticsService.isValidStore(dto.storeId)
-    if (!valid) return { ok: false }
+    // Resolve storeRef (UUID or slug) to actual storeId (ANALYTICS-RULE 6)
+    const storeId = await this.analyticsService.resolveStore(dto.storeRef)
+    if (!storeId) return { ok: false }
 
     // Derive country from IP — IP is never stored (ANALYTICS-RULE 2)
     const forwarded = req.headers['x-forwarded-for']
@@ -52,10 +55,21 @@ export class AnalyticsController implements OnModuleDestroy {
     const { country } = this.geoService.lookup(ip)
     // ip variable goes out of scope here — not stored
 
-    // Push to buffer — return immediately, no await (ANALYTICS-RULE 3)
-    this.buffer.push({ ...dto, country })
+    // Buffer event with resolved storeId — return immediately, no await (ANALYTICS-RULE 3)
+    this.buffer.push({ ...dto, storeId, country })
 
     return { ok: true }
+  }
+
+  @Post('trigger-aggregation')
+  @HttpCode(200)
+  async triggerAggregation() {
+    if (process.env.NODE_ENV !== 'development') {
+      throw new ForbiddenException()
+    }
+    await this.aggregationService.aggregateHourly()
+    await this.aggregationService.aggregateDaily()
+    return { ok: true, message: 'Aggregation triggered' }
   }
 
   private async flush() {

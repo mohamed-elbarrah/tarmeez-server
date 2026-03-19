@@ -3,16 +3,16 @@ import { PrismaService } from '../prisma/prisma.service';
 import { generateSlug } from '../utils/slug.util';
 
 const SEED_CATEGORIES = [
-  { name: 'إلكترونيات',   description: 'أجهزة ومعدات إلكترونية',            image: 'https://placehold.co/600x600/e0f2fe/0284c7?text=%D8%A5%D9%84%D9%83%D8%AA%D8%B1%D9%88%D9%86%D9%8A%D8%A7%D8%AA' },
-  { name: 'ملابس',        description: 'ملابس رجالية ونسائية وأطفال',        image: 'https://placehold.co/600x600/dbeafe/1d4ed8?text=%D9%85%D9%84%D8%A7%D8%A8%D8%B3' },
-  { name: 'أحذية',        description: 'أحذية لجميع الأعمار',                image: 'https://placehold.co/600x600/fce7f3/be185d?text=%D8%A3%D8%AD%D8%B0%D9%8A%D8%A9' },
-  { name: 'إكسسوارات',   description: 'إكسسوارات وإضافات أنيقة',           image: 'https://placehold.co/600x600/fef3c7/d97706?text=%D8%A5%D9%83%D8%B3%D8%B3%D9%88%D8%A7%D8%B1%D8%A7%D8%AA' },
-  { name: 'منزل وديكور', description: 'مستلزمات المنزل والديكور',           image: 'https://placehold.co/600x600/d1fae5/065f46?text=%D9%85%D9%86%D8%B2%D9%84' },
-  { name: 'رياضة',        description: 'معدات وملابس رياضية',                image: 'https://placehold.co/600x600/ede9fe/6d28d9?text=%D8%B1%D9%8A%D8%A7%D8%B6%D8%A9' },
-  { name: 'كتب وتعليم',  description: 'كتب ومواد تعليمية',                  image: 'https://placehold.co/600x600/fee2e2/991b1b?text=%D9%83%D8%AA%D8%A8' },
-  { name: 'جمال وعناية', description: 'منتجات التجميل والعناية الشخصية',   image: 'https://placehold.co/600x600/f0fdf4/166534?text=%D8%AC%D9%85%D8%A7%D9%84' },
-  { name: 'أطفال',        description: 'ألعاب ومستلزمات الأطفال',           image: 'https://placehold.co/600x600/fff7ed/c2410c?text=%D8%A3%D8%B7%D9%81%D8%A7%D9%84' },
-  { name: 'طعام وشراب',  description: 'منتجات غذائية ومشروبات',            image: 'https://placehold.co/600x600/f0f9ff/0369a1?text=%D8%B7%D8%B9%D8%A7%D9%85' },
+  { name: 'إلكترونيات',   description: 'أجهزة ومعدات إلكترونية',            image: 'https://placehold.co/600x600/e0f2fe/0284c7?text=1' },
+  { name: 'ملابس',        description: 'ملابس رجالية ونسائية وأطفال',        image: 'https://placehold.co/600x600/dbeafe/1d4ed8?text=2' },
+  { name: 'أحذية',        description: 'أحذية لجميع الأعمار',                image: 'https://placehold.co/600x600/fce7f3/be185d?text=3' },
+  { name: 'إكسسوارات',   description: 'إكسسوارات وإضافات أنيقة',           image: 'https://placehold.co/600x600/fef3c7/d97706?text=4' },
+  { name: 'منزل وديكور', description: 'مستلزمات المنزل والديكور',           image: 'https://placehold.co/600x600/d1fae5/065f46?text=5' },
+  { name: 'رياضة',        description: 'معدات وملابس رياضية',                image: 'https://placehold.co/600x600/ede9fe/6d28d9?text=6' },
+  { name: 'كتب وتعليم',  description: 'كتب ومواد تعليمية',                  image: 'https://placehold.co/600x600/fee2e2/991b1b?text=7' },
+  { name: 'جمال وعناية', description: 'منتجات التجميل والعناية الشخصية',   image: 'https://placehold.co/600x600/f0fdf4/166534?text=8' },
+  { name: 'أطفال',        description: 'ألعاب ومستلزمات الأطفال',           image: 'https://placehold.co/600x600/fff7ed/c2410c?text=9' },
+  { name: 'طعام وشراب',  description: 'منتجات غذائية ومشروبات',            image: 'https://placehold.co/600x600/f0f9ff/0369a1?text=10' },
 ] as const;
 
 const SEED_PRODUCTS = [

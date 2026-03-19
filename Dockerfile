@@ -16,8 +16,8 @@ RUN npm run build
 FROM node:20-alpine
 WORKDIR /app
 
-# تثبيت openssl ضروري جداً لتشغيل Prisma في بيئة الإنتاج
-RUN apk add --no-cache openssl
+# openssl ضروري لـ Prisma — wget للـ healthcheck
+RUN apk add --no-cache openssl wget
 
 ENV NODE_ENV=production
 
@@ -27,8 +27,11 @@ COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/package*.json ./
 
+# إنشاء مجلد الملفات المرفوعة
+RUN mkdir -p uploads
+
 EXPOSE 8000
 
-# التعديل الجوهري هنا: تشغيل الملف مباشرة بالامتداد .js
-# تأكد إذا كان ملف main.js موجود داخل dist مباشرة أو داخل dist/src
-CMD ["node", "dist/src/main.js"]
+# 1. تطبيق أي migrations معلّقة (آمن إذا لا يوجد تغيير)
+# 2. تشغيل السيرفر
+CMD ["sh", "-c", "npx prisma migrate deploy && node dist/src/main.js"]

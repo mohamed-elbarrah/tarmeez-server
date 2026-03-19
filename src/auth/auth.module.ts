@@ -6,6 +6,7 @@ import { AuthController } from './auth.controller';
 import { JwtAccessStrategy } from './strategies/jwt-access.strategy';
 import { JwtRefreshStrategy } from './strategies/jwt-refresh.strategy';
 import { CustomerGuard } from './guards/customer.guard';
+import { StoreSeedService } from './store-seed.service';
 
 @Module({
     imports: [
@@ -18,6 +19,7 @@ import { CustomerGuard } from './guards/customer.guard';
         JwtAccessStrategy,
         JwtRefreshStrategy,
         CustomerGuard,
+        StoreSeedService,
     ],
     exports: [AuthService, CustomerGuard, JwtModule],
 })

@@ -39,8 +39,12 @@ export class AuthController {
     }
 
     @Post('platform/register')
-    async merchantRegister(@Body() dto: MerchantRegister.MerchantRegisterDto) {
+    async merchantRegister(
+        @Body() dto: MerchantRegister.MerchantRegisterDto,
+        @Res({ passthrough: true }) res: Response,
+    ) {
         const result = await this.authService.merchantRegister(dto);
+        this.authService.setTokenCookies(res, result.accessToken, result.refreshToken);
         return { message: result.message, user: result.user };
     }
 

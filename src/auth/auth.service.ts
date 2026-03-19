@@ -15,6 +15,8 @@ import { MerchantRegisterDto } from './dto/merchant-register.dto';
 import { CustomerLoginDto } from './dto/customer-login.dto';
 import { CustomerRegisterDto } from './dto/customer-register.dto';
 import { UserRole, MerchantStatus } from '@prisma/client';
+import { StoreSeedService } from './store-seed.service';
+import { generateSlug } from '../utils/slug.util';
 
 export interface AuthUserResponse {
     id: string;
@@ -40,6 +42,7 @@ export class AuthService {
         private prisma: PrismaService,
         private jwtService: JwtService,
         private configService: ConfigService,
+        private storeSeedService: StoreSeedService,
     ) { }
 
     async platformLogin(dto: PlatformLoginDto) {
@@ -102,7 +105,7 @@ export class AuthService {
         if (existingStore) throw new ConflictException('Store name already taken');
 
         const hashedPassword = await bcrypt.hash(dto.password, 10);
-        const storeSlug = dto.storeName.toLowerCase().replace(/ /g, '-');
+        const storeSlug = generateSlug(dto.storeName) || dto.storeName.toLowerCase().replace(/\s+/g, '-');
 
         const result = await this.prisma.$transaction(async (tx) => {
             const user = await tx.user.create({
@@ -129,8 +132,23 @@ export class AuthService {
                 },
             });
 
-            return { user, merchant };
+            const store = await tx.store.create({
+                data: {
+                    merchantId: merchant.id,
+                    slug: storeSlug,
+                    name: dto.storeName,
+                },
+            });
+
+            return { user, merchant, store };
         });
+
+        // Fire-and-forget seed — never awaited in the registration flow
+        this.storeSeedService.seedStore(result.store.id)
+            .catch(err => console.error('Seed failed for store', result.store.id, err));
+
+        const tokens = await this.generateTokens(result.user.id, result.user.email, result.user.role, null);
+        await this.updateRefreshToken(result.user.id, tokens.refreshToken);
 
         const userResp: AuthUserResponse = {
             id: result.user.id,
@@ -144,7 +162,9 @@ export class AuthService {
         };
 
         return {
-            message: 'Application submitted successfully',
+            accessToken: tokens.accessToken,
+            refreshToken: tokens.refreshToken,
+            message: 'Registration successful',
             user: userResp,
         };
     }

@@ -1,51 +1,32 @@
 /**
- * Utility for slug generation and sanitization with Arabic transliteration support.
+ * Utility for slug generation and sanitization.
+ * Arabic names are preserved as-is (spaces → hyphens).
+ * Latin names are lowercased.
+ *
+ * Examples:
+ *   'هاتف ذكي متطور' → 'هاتف-ذكي-متطور'
+ *   'iPhone 15 Pro'  → 'iphone-15-pro'
+ *   'منتج مميز 2024' → 'منتج-مميز-2024'
  */
 
-const arabicToEnglishMap: Record<string, string> = {
-  'ا': 'a', 'أ': 'a', 'إ': 'i', 'آ': 'a',
-  'ب': 'b', 'ت': 't', 'ث': 'th', 'ج': 'j',
-  'ح': 'h', 'خ': 'kh', 'د': 'd', 'ذ': 'dh',
-  'ر': 'r', 'ز': 'z', 'س': 's', 'ش': 'sh',
-  'ص': 's', 'ض': 'd', 'ط': 't', 'ظ': 'z',
-  'ع': 'a', 'غ': 'gh', 'ف': 'f', 'ق': 'q',
-  'ك': 'k', 'ل': 'l', 'م': 'm', 'ن': 'n',
-  'ه': 'h', 'و': 'w', 'ي': 'y', 'ى': 'a',
-  'ة': 'a', 'ئ': 'e', 'ء': 'a', 'ؤ': 'u',
-  ' ': '-', '_': '-',
-};
-
 /**
- * Transliterates Arabic characters to English equivalents.
- */
-function transliterate(text: string): string {
-  return text
-    .split('')
-    .map(char => arabicToEnglishMap[char] || char)
-    .join('');
-}
-
-/**
- * Generates a URL-safe slug from a string, supporting Arabic.
+ * Generates a URL-safe slug from a string.
+ * Preserves Arabic characters — does NOT transliterate.
  */
 export function generateSlug(text: string): string {
-  const transliterated = transliterate(text.toLowerCase().trim());
-  return transliterated
-    .replace(/[^a-z0-9-]/g, '')
+  return text
+    .trim()
+    .replace(/\s+/g, '-')
+    // Keep Arabic letters (basic + extended), Latin alphanumeric, digits, hyphens
+    .replace(/[^\u0600-\u06FF\u0750-\u077Fa-zA-Z0-9-]/g, '')
     .replace(/-+/g, '-')
-    .replace(/^-|-$/g, '');
+    .replace(/^-|-$/g, '')
+    .toLowerCase();
 }
 
 /**
- * Sanitizes an existing slug to ensure it only contains safe characters.
- * Removes Arabic characters as they should be transliterated during generation.
+ * Sanitizes an existing slug — same rules as generateSlug.
  */
 export function sanitizeSlug(slug: string): string {
-  return slug
-    .toLowerCase()
-    .trim()
-    .replace(/[\u0600-\u06FF]/g, '') // remove remaining Arabic
-    .replace(/[^a-z0-9-]/g, '')      // keep only safe chars
-    .replace(/-+/g, '-')
-    .replace(/^-|-$/g, '');
+  return generateSlug(slug);
 }

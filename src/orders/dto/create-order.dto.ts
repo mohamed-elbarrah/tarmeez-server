@@ -24,4 +24,5 @@ export class CreateOrderDto {
   @Type(() => OrderItemDto) items: OrderItemDto[]
   @IsOptional() @IsString() notes?: string
   @IsString() storeSlug: string
+  @IsOptional() @IsString() couponCode?: string
 }

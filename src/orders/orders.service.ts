@@ -1,6 +1,7 @@
 import { Injectable, BadRequestException, NotFoundException, HttpException } from '@nestjs/common'
 import { PrismaService } from '../prisma/prisma.service'
 import { PaymentRegistry } from '../payments/payment.registry'
+import { CouponsService } from '../coupons/coupons.service'
 import { CreateOrderDto } from './dto/create-order.dto'
 import { generateUniqueOrderCode } from './utils/order-code.util'
 
@@ -9,6 +10,7 @@ export class OrdersService {
   constructor(
     private prisma: PrismaService,
     private payments: PaymentRegistry,
+    private couponsService: CouponsService,
   ) {}
 
   async createOrder(dto: CreateOrderDto, userId?: string) {
@@ -55,7 +57,27 @@ export class OrdersService {
     }
 
     const shippingCost = 0
-    const total = subtotal + shippingCost
+    let couponDiscount = 0
+    let couponValidation: any = null
+
+    // Coupon validation
+    if (dto.couponCode) {
+      couponValidation = await this.couponsService.validate({
+        code: dto.couponCode,
+        storeId: store.id,
+        orderTotal: subtotal,
+        customerId: customerId ?? undefined,
+        productIds: dto.items.map(i => i.productId),
+      })
+
+      if (!couponValidation.valid) {
+        throw new BadRequestException(couponValidation.message)
+      }
+
+      couponDiscount = couponValidation.discount
+    }
+
+    const total = subtotal + shippingCost - couponDiscount
 
     // 5. Generate unique order code
     const orderCode = await generateUniqueOrderCode(this.prisma as any)
@@ -97,6 +119,8 @@ export class OrdersService {
           subtotal: subtotal as any,
           shippingCost: shippingCost as any,
           total: total as any,
+          couponCode: dto.couponCode ?? null,
+          couponDiscount: couponDiscount,
           notes: dto.notes,
           status: 'PENDING',
           items: {
@@ -116,6 +140,16 @@ export class OrdersService {
 
       return newOrder
     })
+
+    // Record coupon usage after transaction succeeds
+    if (dto.couponCode && couponValidation?.valid && couponValidation.couponId) {
+      await this.couponsService.recordUsage(
+        couponValidation.couponId,
+        order.id,
+        customerId,
+        couponDiscount,
+      )
+    }
 
     return order
   }

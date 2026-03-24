@@ -16,6 +16,7 @@ import { CategoriesModule } from './categories/categories.module';
 import { PagesModule } from './pages/pages.module';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { AnalyticsModule } from './analytics/analytics.module';
+import { CouponsModule } from './coupons/coupons.module';
 
 @Module({
   imports: [
@@ -33,6 +34,7 @@ import { AnalyticsModule } from './analytics/analytics.module';
     CategoriesModule,
     PagesModule,
     AnalyticsModule,
+    CouponsModule,
     ThrottlerModule.forRoot({ ttl: 60, limit: 5 }),
   ],
   controllers: [AppController],

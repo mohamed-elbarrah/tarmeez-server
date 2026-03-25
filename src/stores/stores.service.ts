@@ -9,6 +9,15 @@ export class StoresService {
         const store = await (this.prisma.store as any).findUnique({
             where: { slug },
             include: {
+                theme: {
+                    select: {
+                        id: true,
+                        slug: true,
+                        name: true,
+                        previewImage: true,
+                        defaultConfig: true,
+                    },
+                },
                 merchant: {
                     select: {
                         fullName: true,

@@ -9,8 +9,15 @@ import { extname } from 'path';
 import * as fs from 'fs';
 import { PaymentRegistry } from '../payments/payment.registry';
 import { OrdersService } from '../orders/orders.service';
+import { IsNotEmpty, IsString } from 'class-validator';
 
 type JwtUser = { id: string; email?: string; role?: string };
+
+class SwitchThemeDto {
+  @IsString()
+  @IsNotEmpty()
+  themeId!: string;
+}
 
 @UseGuards(MerchantGuard)
 @Controller('merchant')
@@ -102,6 +109,14 @@ export class MerchantController {
       if (!available.includes(k)) throw new BadRequestException(`Payment gateway ${k} not found`)
     }
     return this.svc.updatePaymentSettings(user.id, body.enabledMethods)
+  }
+
+  @Patch('store/theme')
+  async switchTheme(
+    @CurrentUser() user: JwtUser,
+    @Body() dto: SwitchThemeDto,
+  ) {
+    return this.svc.switchTheme(user.id, dto.themeId);
   }
 
   @Get('orders')

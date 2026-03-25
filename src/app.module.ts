@@ -17,6 +17,7 @@ import { PagesModule } from './pages/pages.module';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { AnalyticsModule } from './analytics/analytics.module';
 import { CouponsModule } from './coupons/coupons.module';
+import { ThemesModule } from './themes/themes.module';
 
 @Module({
   imports: [
@@ -35,6 +36,7 @@ import { CouponsModule } from './coupons/coupons.module';
     PagesModule,
     AnalyticsModule,
     CouponsModule,
+    ThemesModule,
     ThrottlerModule.forRoot({ ttl: 60, limit: 5 }),
   ],
   controllers: [AppController],

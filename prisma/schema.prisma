@@ -93,6 +93,21 @@ model Merchant {
   store Store?
 }
 
+// ─── Theme System ────────────────────────────────────────────────────────────
+model Theme {
+  id            String   @id @default(uuid())
+  slug          String   @unique   // e.g. 'default', 'modern-dark'
+  name          String
+  previewImage  String?
+  defaultConfig Json     @default("{}") // ThemeConfig JSON (colors, fonts, etc.)
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  stores        Store[]
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
 model Store {
   id             String   @id @default(uuid())
   merchantId     String   @unique
@@ -102,6 +117,7 @@ model Store {
   customDomain   String?  @unique
   domainStatus   String?
   themeId        String?
+  theme          Theme?   @relation(fields: [themeId], references: [id])
   isOnboarded    Boolean  @default(false)
   logo           String?
   logoWidth      Int?

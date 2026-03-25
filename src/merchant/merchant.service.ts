@@ -282,4 +282,32 @@ export class MerchantService {
       } as any,
     });
   }
+
+  async switchTheme(userId: string, themeId: string) {
+    const merchant = await this.prisma.merchant.findUnique({
+      where: { userId },
+      include: { store: true },
+    });
+
+    if (!merchant || !merchant.store) {
+      throw new NotFoundException('Store not found');
+    }
+
+    // Verify the theme exists and is active
+    const theme = await (this.prisma as any).theme.findUnique({
+      where: { id: themeId },
+    });
+
+    if (!theme || !theme.isActive) {
+      throw new NotFoundException(`Theme '${themeId}' not found or is inactive`);
+    }
+
+    const updated = await this.prisma.store.update({
+      where: { id: merchant.store.id },
+      data: { themeId } as any,
+      select: { id: true, themeId: true },
+    });
+
+    return { storeId: updated.id, themeId: updated.themeId };
+  }
 }

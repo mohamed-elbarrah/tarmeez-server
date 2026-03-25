@@ -57,7 +57,9 @@ async function main() {
         where: { themeId: null } as any,
         data: { themeId: record.id } as any,
       });
-      console.log(`  🔗  Linked ${result.count} store(s) to '${record.slug}' theme`);
+      console.log(
+        `  🔗  Linked ${result.count} store(s) to '${record.slug}' theme`,
+      );
     }
   }
 

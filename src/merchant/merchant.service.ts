@@ -299,7 +299,9 @@ export class MerchantService {
     });
 
     if (!theme || !theme.isActive) {
-      throw new NotFoundException(`Theme '${themeId}' not found or is inactive`);
+      throw new NotFoundException(
+        `Theme '${themeId}' not found or is inactive`,
+      );
     }
 
     const updated = await this.prisma.store.update({

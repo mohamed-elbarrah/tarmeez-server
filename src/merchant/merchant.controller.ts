@@ -1,4 +1,16 @@
-import { Controller, Get, Patch, Body, UseGuards, Post, UseInterceptors, UploadedFile, BadRequestException, Query, Param } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Patch,
+  Body,
+  UseGuards,
+  Post,
+  UseInterceptors,
+  UploadedFile,
+  BadRequestException,
+  Query,
+  Param,
+} from '@nestjs/common';
 import { MerchantService } from './merchant.service';
 import { MerchantGuard } from './guards/merchant.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
@@ -22,7 +34,11 @@ class SwitchThemeDto {
 @UseGuards(MerchantGuard)
 @Controller('merchant')
 export class MerchantController {
-  constructor(private svc: MerchantService, private registry: PaymentRegistry, private ordersSvc: OrdersService) { }
+  constructor(
+    private svc: MerchantService,
+    private registry: PaymentRegistry,
+    private ordersSvc: OrdersService,
+  ) {}
 
   @Get('customers')
   async getCustomers(
@@ -32,7 +48,12 @@ export class MerchantController {
     @Query('page') page = '1',
     @Query('limit') limit = '20',
   ) {
-    const params = { search, status, page: parseInt(page, 10), limit: parseInt(limit, 10) } as any;
+    const params = {
+      search,
+      status,
+      page: parseInt(page, 10),
+      limit: parseInt(limit, 10),
+    } as any;
     return this.svc.getCustomers(user.id, params);
   }
 
@@ -60,36 +81,41 @@ export class MerchantController {
   }
 
   @Post('store/upload-image')
-  @UseInterceptors(FileInterceptor('file', {
-    storage: diskStorage({
-      destination: (req, file, cb) => {
-        const user: any = (req as any).user || {};
-        const merchantId = user.id || 'unknown';
-        const dir = `uploads/stores/${merchantId}`;
-        try {
-          fs.mkdirSync(dir, { recursive: true });
-        } catch (e) {
-          // ignore
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage: diskStorage({
+        destination: (req, file, cb) => {
+          const user: any = (req as any).user || {};
+          const merchantId = user.id || 'unknown';
+          const dir = `uploads/stores/${merchantId}`;
+          try {
+            fs.mkdirSync(dir, { recursive: true });
+          } catch (e) {
+            // ignore
+          }
+          cb(null, dir);
+        },
+        filename: (req, file, cb) => {
+          const timestamp = Date.now();
+          const safeName = file.originalname.replace(/\s+/g, '-');
+          cb(null, `${timestamp}-${safeName}`);
+        },
+      }),
+      fileFilter: (req, file, cb) => {
+        const allowed = ['.jpg', '.jpeg', '.png', '.svg', '.ico', '.webp'];
+        const ext = extname(file.originalname).toLowerCase();
+        if (!allowed.includes(ext)) {
+          return cb(new BadRequestException('Invalid file type'), false as any);
         }
-        cb(null, dir);
+        cb(null, true as any);
       },
-      filename: (req, file, cb) => {
-        const timestamp = Date.now();
-        const safeName = file.originalname.replace(/\s+/g, '-');
-        cb(null, `${timestamp}-${safeName}`);
-      },
+      limits: { fileSize: 2 * 1024 * 1024 },
     }),
-    fileFilter: (req, file, cb) => {
-      const allowed = ['.jpg', '.jpeg', '.png', '.svg', '.ico', '.webp'];
-      const ext = extname(file.originalname).toLowerCase();
-      if (!allowed.includes(ext)) {
-        return cb(new BadRequestException('Invalid file type'), false as any);
-      }
-      cb(null, true as any);
-    },
-    limits: { fileSize: 2 * 1024 * 1024 },
-  }))
-  async uploadStoreImage(@CurrentUser() user: JwtUser, @UploadedFile() file: Express.Multer.File) {
+  )
+  async uploadStoreImage(
+    @CurrentUser() user: JwtUser,
+    @UploadedFile() file: Express.Multer.File,
+  ) {
     if (!file) throw new BadRequestException('No file uploaded');
     const baseUrl = process.env.SERVER_URL ?? 'http://localhost:8000';
     const url = `${baseUrl}/uploads/stores/${user.id}/${file.filename}`;
@@ -98,24 +124,25 @@ export class MerchantController {
 
   @Get('store/payment-methods')
   async getPaymentMethods(@CurrentUser() user: JwtUser) {
-    return this.svc.getPaymentSettings(user.id, this.registry)
+    return this.svc.getPaymentSettings(user.id, this.registry);
   }
 
   @Patch('store/payment-methods')
-  async updatePaymentMethods(@CurrentUser() user: JwtUser, @Body() body: { enabledMethods: string[] }) {
+  async updatePaymentMethods(
+    @CurrentUser() user: JwtUser,
+    @Body() body: { enabledMethods: string[] },
+  ) {
     // validate keys exist
-    const available = this.registry.getAll().map(g => (g as any).key)
+    const available = this.registry.getAll().map((g) => (g as any).key);
     for (const k of body.enabledMethods) {
-      if (!available.includes(k)) throw new BadRequestException(`Payment gateway ${k} not found`)
+      if (!available.includes(k))
+        throw new BadRequestException(`Payment gateway ${k} not found`);
     }
-    return this.svc.updatePaymentSettings(user.id, body.enabledMethods)
+    return this.svc.updatePaymentSettings(user.id, body.enabledMethods);
   }
 
   @Patch('store/theme')
-  async switchTheme(
-    @CurrentUser() user: JwtUser,
-    @Body() dto: SwitchThemeDto,
-  ) {
+  async switchTheme(@CurrentUser() user: JwtUser, @Body() dto: SwitchThemeDto) {
     return this.svc.switchTheme(user.id, dto.themeId);
   }
 
@@ -127,16 +154,28 @@ export class MerchantController {
     @Query('limit') limit = '20',
     @Query('search') search?: string,
   ) {
-    return this.svc.getOrders(user.id, { status, page: parseInt(page, 10), limit: parseInt(limit, 10), search })
+    return this.svc.getOrders(user.id, {
+      status,
+      page: parseInt(page, 10),
+      limit: parseInt(limit, 10),
+      search,
+    });
   }
 
   @Get('orders/:orderCode')
-  async getOrderDetail(@CurrentUser() user: JwtUser, @Param('orderCode') orderCode: string) {
-    return this.svc.getOrderByCode(user.id, orderCode)
+  async getOrderDetail(
+    @CurrentUser() user: JwtUser,
+    @Param('orderCode') orderCode: string,
+  ) {
+    return this.svc.getOrderByCode(user.id, orderCode);
   }
 
   @Patch('orders/:orderCode/status')
-  async updateOrderStatus(@CurrentUser() user: JwtUser, @Param('orderCode') orderCode: string, @Body() body: { status: any }) {
-    return this.svc.updateOrderStatus(user.id, orderCode, body.status)
+  async updateOrderStatus(
+    @CurrentUser() user: JwtUser,
+    @Param('orderCode') orderCode: string,
+    @Body() body: { status: any },
+  ) {
+    return this.svc.updateOrderStatus(user.id, orderCode, body.status);
   }
 }

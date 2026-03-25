@@ -42,5 +42,4 @@ import { ThemesModule } from './themes/themes.module';
   controllers: [AppController],
   providers: [AppService],
 })
-export class AppModule { }
-
+export class AppModule {}

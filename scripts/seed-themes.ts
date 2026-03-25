@@ -5,7 +5,7 @@
  *   npx ts-node -r tsconfig-paths/register scripts/seed-themes.ts
  *
  * What it does:
- *   1. Creates the 'default' theme record (idempotent — uses upsert).
+ *   1. Upserts all theme records (idempotent).
  *   2. Links every Store that has no themeId to the 'default' theme.
  */
 
@@ -16,7 +16,7 @@ const prisma = new PrismaClient();
 const THEMES = [
   {
     slug: 'default',
-    name: 'Default',
+    name: 'القالب الافتراضي',
     previewImage: null,
     defaultConfig: {
       primary: '#2563eb',
@@ -27,6 +27,25 @@ const THEMES = [
       buttonColor: '#2563eb',
       fontFamily: "'Cairo', sans-serif",
       borderRadius: '8px',
+      logoWidth: 120,
+      logoHeight: 40,
+      showStoreName: true,
+    },
+    isActive: true,
+  },
+  {
+    slug: 'modern',
+    name: 'القالب العصري',
+    previewImage: null,
+    defaultConfig: {
+      primary: '#10b981',
+      secondary: '#064e3b',
+      accent: '#f59e0b',
+      textColor: '#1e293b',
+      headingColor: '#064e3b',
+      buttonColor: '#10b981',
+      fontFamily: "'Tajawal', sans-serif",
+      borderRadius: '16px',
       logoWidth: 120,
       logoHeight: 40,
       showStoreName: true,

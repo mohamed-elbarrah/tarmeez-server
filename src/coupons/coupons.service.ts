@@ -214,9 +214,19 @@ export class CouponsService {
   }> {
     const fail = (message: string) => ({ valid: false, discount: 0, message })
 
+    // Resolve storeId from storeSlug if needed
+    let storeId = dto.storeId
+    if (!storeId && dto.storeSlug) {
+      const store = await this.prisma.store.findUnique({ where: { slug: dto.storeSlug } })
+      if (!store) return fail('معرّف المتجر غير صالح')
+      storeId = store.id
+    }
+
+    if (!storeId) return fail('معرّف المتجر غير متاح')
+
     // 1. Coupon exists for this store
     const coupon = await this.prisma.coupon.findUnique({
-      where: { storeId_code: { storeId: dto.storeId, code: dto.code.toUpperCase().trim() } },
+      where: { storeId_code: { storeId, code: dto.code.toUpperCase().trim() } },
       include: { freeProduct: { select: { id: true, name: true } } },
     })
     if (!coupon) return fail('كود الخصم غير صالح')

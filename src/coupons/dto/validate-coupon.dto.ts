@@ -4,8 +4,12 @@ export class ValidateCouponDto {
   @IsString() @IsNotEmpty()
   code: string
 
-  @IsString() @IsNotEmpty()
-  storeId: string
+  // Accept either storeId (preferred) or storeSlug (fallback from storefront themes)
+  @IsOptional() @IsString()
+  storeId?: string
+
+  @IsOptional() @IsString()
+  storeSlug?: string
 
   @IsNumber() @Min(0)
   orderTotal: number

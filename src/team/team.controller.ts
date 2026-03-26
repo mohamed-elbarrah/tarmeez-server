@@ -27,8 +27,7 @@ export class TeamController {
   @HttpCode(HttpStatus.CREATED)
   invite(@Req() req: any, @Body() dto: InviteTeamMemberDto) {
     const storeId: string = req.user.storeId;
-    const merchantName: string =
-      req.user.merchant?.fullName ?? req.user.email;
+    const merchantName: string = req.user.merchant?.fullName ?? req.user.email;
     return this.teamService.inviteMember(storeId, merchantName, dto);
   }
 

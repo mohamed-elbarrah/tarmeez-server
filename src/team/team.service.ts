@@ -62,10 +62,7 @@ export class TeamService {
       },
     });
 
-    const baseUrl = this.config.get<string>(
-      'APP_URL',
-      'http://localhost:3000',
-    );
+    const baseUrl = this.config.get<string>('APP_URL', 'http://localhost:3000');
     const invitationUrl = `${baseUrl}/invite/accept?token=${token}`;
 
     await this.mail.sendEmail(

@@ -63,9 +63,7 @@ export function TeamInvitationEmail({
                 دعوة للانضمام إلى فريق العمل
               </Heading>
 
-              <Text className="text-base leading-7 text-gray-600">
-                مرحباً،
-              </Text>
+              <Text className="text-base leading-7 text-gray-600">مرحباً،</Text>
 
               <Text className="text-base leading-7 text-gray-600">
                 لقد دعاك{' '}

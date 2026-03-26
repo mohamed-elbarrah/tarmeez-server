@@ -1,5 +1,6 @@
 import {
   Injectable,
+  Logger,
   NotFoundException,
   ConflictException,
 } from '@nestjs/common';
@@ -14,6 +15,8 @@ import { TeamInvitationEmail } from '../mail/templates/TeamInvitation';
 
 @Injectable()
 export class TeamService {
+  private readonly logger = new Logger(TeamService.name);
+
   constructor(
     private prisma: PrismaService,
     private mail: MailService,
@@ -22,17 +25,24 @@ export class TeamService {
 
   async inviteMember(
     storeId: string,
-    merchantName: string,
+    userId: string,
     dto: InviteTeamMemberDto,
   ) {
-    // Verify store exists
-    const store = await this.prisma.store.findUnique({
-      where: { id: storeId },
-      select: { id: true, name: true },
-    });
+    // Verify store exists and resolve merchant display name in parallel
+    const [store, merchant] = await Promise.all([
+      this.prisma.store.findUnique({
+        where: { id: storeId },
+        select: { id: true, name: true },
+      }),
+      this.prisma.merchant.findUnique({
+        where: { userId },
+        select: { fullName: true },
+      }),
+    ]);
     if (!store) {
       throw new NotFoundException('Store not found');
     }
+    const merchantName = merchant?.fullName ?? 'صاحب المتجر';
 
     // Check for existing pending invitation for same email + store
     const existingInvitation = await this.prisma.storeInvitation.findFirst({
@@ -65,16 +75,22 @@ export class TeamService {
     const baseUrl = this.config.get<string>('APP_URL', 'http://localhost:3000');
     const invitationUrl = `${baseUrl}/invite/accept?token=${token}`;
 
-    await this.mail.sendEmail(
-      dto.email,
-      `دعوة للانضمام إلى فريق متجر ${store.name}`,
-      React.createElement(TeamInvitationEmail, {
-        merchantName,
-        storeName: store.name,
-        invitationUrl,
-        role: dto.role,
-      }),
-    );
+    try {
+      await this.mail.sendEmail(
+        dto.email,
+        `دعوة للانضمام إلى فريق متجر ${store.name}`,
+        React.createElement(TeamInvitationEmail, {
+          merchantName,
+          storeName: store.name,
+          invitationUrl,
+          role: dto.role,
+        }),
+      );
+    } catch (err) {
+      this.logger.error(
+        `Failed to send invitation email to ${dto.email}: ${(err as Error).message}`,
+      );
+    }
 
     return {
       id: invitation.id,
@@ -124,6 +140,20 @@ export class TeamService {
       throw new ConflictException('Cannot remove the store owner');
     }
     await this.prisma.storeMember.delete({ where: { id: memberId } });
+    return { success: true };
+  }
+
+  async cancelInvitation(storeId: string, invitationId: string) {
+    const invitation = await this.prisma.storeInvitation.findFirst({
+      where: { id: invitationId, storeId },
+    });
+    if (!invitation) {
+      throw new NotFoundException('Invitation not found');
+    }
+    await this.prisma.storeInvitation.update({
+      where: { id: invitationId },
+      data: { status: 'CANCELLED' },
+    });
     return { success: true };
   }
 }

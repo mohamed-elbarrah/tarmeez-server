@@ -1,10 +1,18 @@
-import { Injectable, NotFoundException, BadRequestException, ConflictException } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  NotFoundException,
+  BadRequestException,
+  ConflictException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { MerchantStatus, Prisma } from '@prisma/client';
+import { MerchantStatus, StoreRole, Prisma } from '@prisma/client';
 import { seedStoreData } from '../prisma/seed-store';
 
 @Injectable()
 export class SuperadminService {
+  private readonly logger = new Logger(SuperadminService.name);
+
   constructor(private prisma: PrismaService) {}
 
   async getMerchants(status?: MerchantStatus) {
@@ -61,15 +69,30 @@ export class SuperadminService {
           },
         });
 
+        // Register the merchant as the store OWNER in StoreMember
+        await tx.storeMember.create({
+          data: {
+            userId: updated.userId,
+            storeId: store.id,
+            role: StoreRole.OWNER,
+          },
+        });
+
         // Seed with data
         await seedStoreData(tx, store.id);
 
+        this.logger.log(
+          `Approved merchant ${id} — store ${store.id} created with OWNER membership`,
+        );
         return { merchant: updated, store };
       });
 
       return result;
     } catch (err) {
-      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+      if (
+        err instanceof Prisma.PrismaClientKnownRequestError &&
+        err.code === 'P2002'
+      ) {
         throw new ConflictException('Store already exists');
       }
       throw err;

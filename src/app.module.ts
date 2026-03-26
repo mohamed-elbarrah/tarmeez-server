@@ -18,11 +18,14 @@ import { ThrottlerModule } from '@nestjs/throttler';
 import { AnalyticsModule } from './analytics/analytics.module';
 import { CouponsModule } from './coupons/coupons.module';
 import { ThemesModule } from './themes/themes.module';
+import { MailModule } from './mail/mail.module';
+import { TeamModule } from './team/team.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
     PrismaModule,
+    MailModule,
     AuthModule,
     CustomerModule,
     SuperadminModule,
@@ -37,6 +40,7 @@ import { ThemesModule } from './themes/themes.module';
     AnalyticsModule,
     CouponsModule,
     ThemesModule,
+    TeamModule,
     ThrottlerModule.forRoot({ ttl: 60, limit: 5 }),
   ],
   controllers: [AppController],

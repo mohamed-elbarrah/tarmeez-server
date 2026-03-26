@@ -57,6 +57,22 @@ enum CouponStatus {
   DEPLETED
 }
 
+// ─── Team Management ─────────────────────────────────────────────────────────
+
+enum StoreRole {
+  OWNER
+  ADMIN
+  EDITOR
+  MARKETER
+}
+
+enum InvitationStatus {
+  PENDING
+  ACCEPTED
+  EXPIRED
+  CANCELLED
+}
+
 model User {
   id           String   @id @default(uuid())
   email        String
@@ -70,6 +86,7 @@ model User {
   merchant  Merchant?
   customers Customer[]
   store     Store?     @relation(fields: [storeId], references: [id])
+  storeMembers StoreMember[]
 
   @@unique([email, storeId])
 }
@@ -146,6 +163,8 @@ model Store {
   categories Category[]
   pages      Page[]
   coupons    Coupon[]
+  members    StoreMember[]
+  invitations StoreInvitation[]
 }
 
 model Order {
@@ -485,4 +504,38 @@ model CouponUsage {
   @@index([couponId])
   @@index([customerId, couponId])
   @@map("coupon_usages")
+}
+
+// ─── Team Management Models ───────────────────────────────────────────────────
+
+model StoreMember {
+  id        String    @id @default(uuid())
+  userId    String
+  storeId   String
+  role      StoreRole @default(EDITOR)
+  createdAt DateTime  @default(now())
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, storeId])
+  @@index([storeId])
+  @@map("store_members")
+}
+
+model StoreInvitation {
+  id        String           @id @default(uuid())
+  email     String
+  storeId   String
+  role      StoreRole        @default(EDITOR)
+  token     String           @unique
+  expiresAt DateTime
+  status    InvitationStatus @default(PENDING)
+  createdAt DateTime         @default(now())
+
+  store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@index([storeId])
+  @@index([token])
+  @@map("store_invitations")
 }

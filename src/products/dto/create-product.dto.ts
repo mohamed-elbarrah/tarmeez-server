@@ -1,4 +1,14 @@
-import { IsString, IsNotEmpty, IsNumber, Min, IsOptional, IsBoolean, IsArray, IsEnum, ValidateNested } from 'class-validator';
+import {
+  IsString,
+  IsNotEmpty,
+  IsNumber,
+  Min,
+  IsOptional,
+  IsBoolean,
+  IsArray,
+  IsEnum,
+  ValidateNested,
+} from 'class-validator';
 import { Type } from 'class-transformer';
 
 export enum ProductStatus {

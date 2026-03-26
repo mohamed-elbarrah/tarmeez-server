@@ -400,6 +400,7 @@ model ProductOptionValue {
   optionId      String
   option        ProductOption         @relation(fields: [optionId], references: [id], onDelete: Cascade)
   value         String
+  colorCode     String?
   position      Int                   @default(0)
   variantValues ProductVariantValue[]
 }

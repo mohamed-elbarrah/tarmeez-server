@@ -83,7 +83,8 @@ export class ProductsService {
                                 position: optDto.position || 0,
                                 values: {
                                     create: optDto.values.map((v, i) => ({
-                                        value: v,
+                                        value: v.value,
+                                        colorCode: v.colorCode || null,
                                         position: i
                                     }))
                                 }
@@ -172,7 +173,8 @@ export class ProductsService {
                                     position: optDto.position || 0,
                                     values: {
                                         create: optDto.values.map((v, i) => ({
-                                            value: v,
+                                            value: v.value,
+                                            colorCode: v.colorCode || null,
                                             position: i
                                         }))
                                     }

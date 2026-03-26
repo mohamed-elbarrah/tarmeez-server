@@ -95,6 +95,16 @@ export class CreateProductDto {
   variants?: CreateProductVariantDto[];
 }
 
+export class CreateProductOptionValueDto {
+  @IsString()
+  @IsNotEmpty()
+  value: string;
+
+  @IsString()
+  @IsOptional()
+  colorCode?: string;
+}
+
 export class CreateProductOptionDto {
   @IsString()
   @IsNotEmpty()
@@ -109,8 +119,9 @@ export class CreateProductOptionDto {
   position?: number;
 
   @IsArray()
-  @IsString({ each: true })
-  values: string[];
+  @ValidateNested({ each: true })
+  @Type(() => CreateProductOptionValueDto)
+  values: CreateProductOptionValueDto[];
 }
 
 export class CreateProductVariantDto {

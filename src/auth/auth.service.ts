@@ -4,6 +4,7 @@ import {
   ForbiddenException,
   UnauthorizedException,
   NotFoundException,
+  BadRequestException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
@@ -14,6 +15,7 @@ import { PlatformLoginDto } from './dto/platform-login.dto';
 import { MerchantRegisterDto } from './dto/merchant-register.dto';
 import { CustomerLoginDto } from './dto/customer-login.dto';
 import { CustomerRegisterDto } from './dto/customer-register.dto';
+import { CompleteRegistrationDto } from './dto/complete-registration.dto';
 import { UserRole, MerchantStatus, StoreRole } from '@prisma/client';
 import { StoreSeedService } from './store-seed.service';
 import { generateSlug } from '../utils/slug.util';
@@ -313,6 +315,85 @@ export class AuthService {
       accessToken: tokens.accessToken,
       refreshToken: tokens.refreshToken,
       user: userResp,
+    };
+  }
+
+  /**
+   * Completes registration for a user invited via a team invitation link.
+   * The invitation must already be in ACCEPTED status (acceptInvitation was called first).
+   * Creates the User account + StoreMember in one transaction and issues auth tokens.
+   */
+  async completeInvitedRegistration(dto: CompleteRegistrationDto) {
+    console.log('Registration Attempt - Token:', dto.token);
+
+    const invitation = await this.prisma.storeInvitation.findUnique({
+      where: { token: dto.token },
+      include: { store: { select: { id: true, name: true, slug: true } } },
+    });
+
+    if (!invitation) {
+      throw new NotFoundException('Invitation not found');
+    }
+
+    if (invitation.status !== 'ACCEPTED') {
+      throw new BadRequestException('Invalid or expired invitation link');
+    }
+
+    // Guard against replay — if a user account already exists, they should log in instead
+    const existingUser = await this.prisma.user.findFirst({
+      where: { email: invitation.email, storeId: null },
+    });
+    if (existingUser) {
+      throw new ConflictException(
+        'An account with this email already exists. Please log in.',
+      );
+    }
+
+    const hashedPassword = await bcrypt.hash(dto.password, 10);
+
+    const user = await this.prisma.$transaction(async (tx) => {
+      const newUser = await tx.user.create({
+        data: {
+          email: invitation.email,
+          password: hashedPassword,
+          name: dto.fullName,
+          role: UserRole.MERCHANT,
+          storeId: null,
+        },
+      });
+
+      await tx.storeMember.create({
+        data: {
+          userId: newUser.id,
+          storeId: invitation.storeId,
+          role: invitation.role,
+        },
+      });
+
+      return newUser;
+    });
+
+    const tokens = await this.generateTokens(
+      user.id,
+      user.email,
+      user.role,
+      invitation.storeId,
+    );
+    await this.updateRefreshToken(user.id, tokens.refreshToken);
+
+    const userResp: AuthUserResponse = {
+      id: user.id,
+      email: user.email,
+      role: user.role,
+      merchant: null,
+    };
+
+    return {
+      accessToken: tokens.accessToken,
+      refreshToken: tokens.refreshToken,
+      user: userResp,
+      storeName: invitation.store.name,
+      storeSlug: invitation.store.slug,
     };
   }
 

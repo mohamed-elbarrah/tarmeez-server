@@ -132,24 +132,71 @@ export class MerchantService {
     return updated;
   }
 
-  async getMyStore(userId: string) {
-    const merchant = await this.prisma.merchant.findUnique({
-      where: { userId },
+  async getMyStore(userId: string, storeId: string) {
+    // Path 1: Store owner — has a Merchant record linked to this store
+    const merchant = await this.prisma.merchant.findFirst({
+      where: { userId, store: { id: storeId } },
       include: { store: true },
     });
 
-    if (!merchant) throw new NotFoundException('Merchant not found');
-    if (!merchant.store) throw new NotFoundException('Store not found');
+    if (merchant?.store) {
+      const store: any = merchant.store as any;
+      return {
+        merchant: {
+          id: merchant.id,
+          fullName: merchant.fullName,
+          storeName: merchant.storeName,
+          storeSlug: merchant.storeSlug,
+          status: merchant.status,
+        },
+        store: {
+          id: store.id,
+          slug: store.slug,
+          name: store.name,
+          themeId: store.themeId,
+          isOnboarded: store.isOnboarded,
+          customDomain: store.customDomain,
+          logo: store.logo,
+          logoWidth: store.logoWidth,
+          logoHeight: store.logoHeight,
+          showStoreName: store.showStoreName,
+          storeName: store.storeName,
+          favicon: store.favicon,
+          primaryColor: store.primaryColor,
+          secondaryColor: store.secondaryColor,
+          accentColor: store.accentColor,
+          textColor: store.textColor,
+          headingColor: store.headingColor,
+          buttonColor: store.buttonColor,
+          fontFamily: store.fontFamily,
+          borderRadius: store.borderRadius,
+        },
+      };
+    }
 
-    const store: any = merchant.store as any;
+    // Path 2: Team member — has a StoreMember record, no Merchant record
+    const membership = await this.prisma.storeMember.findFirst({
+      where: { userId, storeId },
+      include: { store: true },
+    });
 
+    if (!membership?.store) {
+      throw new NotFoundException('Store not found for this account');
+    }
+
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { name: true, email: true },
+    });
+
+    const store: any = membership.store as any;
     return {
       merchant: {
-        id: merchant.id,
-        fullName: merchant.fullName,
-        storeName: merchant.storeName,
-        storeSlug: merchant.storeSlug,
-        status: merchant.status,
+        id: userId,
+        fullName: user?.name ?? user?.email ?? '',
+        storeName: store.name,
+        storeSlug: store.slug,
+        status: 'ACTIVE' as const,
       },
       store: {
         id: store.id,

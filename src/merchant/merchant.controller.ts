@@ -10,7 +10,9 @@ import {
   BadRequestException,
   Query,
   Param,
+  Req,
 } from '@nestjs/common';
+import type { Request } from 'express';
 import { MerchantService } from './merchant.service';
 import { MerchantGuard } from './guards/merchant.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
@@ -68,8 +70,8 @@ export class MerchantController {
   }
 
   @Get('me')
-  async getMyStore(@CurrentUser() user: JwtUser) {
-    return this.svc.getMyStore(user.id);
+  async getMyStore(@CurrentUser() user: JwtUser, @Req() req: Request) {
+    return this.svc.getMyStore(user.id, req.activeStore.id);
   }
 
   @Patch('store/customization')

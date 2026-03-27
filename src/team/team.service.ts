@@ -2,6 +2,7 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  BadRequestException,
   ConflictException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -155,5 +156,70 @@ export class TeamService {
       data: { status: 'CANCELLED' },
     });
     return { success: true };
+  }
+
+  async acceptInvitation(token: string) {
+    const invitation = await this.prisma.storeInvitation.findUnique({
+      where: { token },
+      include: { store: { select: { id: true, name: true } } },
+    });
+
+    if (!invitation) {
+      throw new NotFoundException('Invitation not found');
+    }
+
+    if (invitation.status !== 'PENDING') {
+      throw new BadRequestException(
+        invitation.status === 'ACCEPTED'
+          ? 'This invitation has already been accepted'
+          : 'This invitation is no longer valid',
+      );
+    }
+
+    if (new Date() > invitation.expiresAt) {
+      await this.prisma.storeInvitation.update({
+        where: { id: invitation.id },
+        data: { status: 'EXPIRED' },
+      });
+      throw new BadRequestException('This invitation has expired');
+    }
+
+    // Check if a platform user with this email already exists
+    const existingUser = await this.prisma.user.findFirst({
+      where: { email: invitation.email },
+      select: { id: true },
+    });
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.storeInvitation.update({
+        where: { id: invitation.id },
+        data: { status: 'ACCEPTED' },
+      });
+
+      if (existingUser) {
+        // Create (or update) the StoreMember record immediately
+        await tx.storeMember.upsert({
+          where: {
+            userId_storeId: {
+              userId: existingUser.id,
+              storeId: invitation.storeId,
+            },
+          },
+          create: {
+            userId: existingUser.id,
+            storeId: invitation.storeId,
+            role: invitation.role,
+          },
+          update: { role: invitation.role },
+        });
+      }
+    });
+
+    return {
+      email: invitation.email,
+      role: invitation.role,
+      storeName: invitation.store.name,
+      userExists: !!existingUser,
+    };
   }
 }

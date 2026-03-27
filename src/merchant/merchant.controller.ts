@@ -24,6 +24,9 @@ import * as fs from 'fs';
 import { PaymentRegistry } from '../payments/payment.registry';
 import { OrdersService } from '../orders/orders.service';
 import { IsNotEmpty, IsString } from 'class-validator';
+import { Action } from '../common/enums/action.enum';
+import { Resource } from '../common/enums/resource.enum';
+import { Permissions } from '../common/decorators/permissions.decorator';
 
 type JwtUser = { id: string; email?: string; role?: string };
 
@@ -43,6 +46,7 @@ export class MerchantController {
   ) {}
 
   @Get('customers')
+  @Permissions(Resource.CUSTOMERS, Action.READ)
   async getCustomers(
     @CurrentUser() user: JwtUser,
     @Query('search') search?: string,
@@ -60,6 +64,7 @@ export class MerchantController {
   }
 
   @Patch('customers/:id/status')
+  @Permissions(Resource.CUSTOMERS, Action.UPDATE)
   async updateCustomerStatus(
     @CurrentUser() user: JwtUser,
     @Param('id') id: string,
@@ -70,11 +75,13 @@ export class MerchantController {
   }
 
   @Get('me')
+  @Permissions(Resource.SETTINGS, Action.READ)
   async getMyStore(@CurrentUser() user: JwtUser, @Req() req: Request) {
     return this.svc.getMyStore(user.id, req.activeStore.id);
   }
 
   @Patch('store/customization')
+  @Permissions(Resource.SETTINGS, Action.UPDATE)
   async updateStoreCustomization(
     @CurrentUser() user: JwtUser,
     @Body() dto: UpdateStoreDto,
@@ -83,6 +90,7 @@ export class MerchantController {
   }
 
   @Post('store/upload-image')
+  @Permissions(Resource.SETTINGS, Action.UPDATE)
   @UseInterceptors(
     FileInterceptor('file', {
       storage: diskStorage({
@@ -125,11 +133,13 @@ export class MerchantController {
   }
 
   @Get('store/payment-methods')
+  @Permissions(Resource.SETTINGS, Action.READ)
   async getPaymentMethods(@CurrentUser() user: JwtUser) {
     return this.svc.getPaymentSettings(user.id, this.registry);
   }
 
   @Patch('store/payment-methods')
+  @Permissions(Resource.SETTINGS, Action.UPDATE)
   async updatePaymentMethods(
     @CurrentUser() user: JwtUser,
     @Body() body: { enabledMethods: string[] },
@@ -144,11 +154,13 @@ export class MerchantController {
   }
 
   @Patch('store/theme')
+  @Permissions(Resource.SETTINGS, Action.UPDATE)
   async switchTheme(@CurrentUser() user: JwtUser, @Body() dto: SwitchThemeDto) {
     return this.svc.switchTheme(user.id, dto.themeId);
   }
 
   @Get('orders')
+  @Permissions(Resource.ORDERS, Action.READ)
   async getOrders(
     @CurrentUser() user: JwtUser,
     @Query('status') status?: string,
@@ -165,6 +177,7 @@ export class MerchantController {
   }
 
   @Get('orders/:orderCode')
+  @Permissions(Resource.ORDERS, Action.READ)
   async getOrderDetail(
     @CurrentUser() user: JwtUser,
     @Param('orderCode') orderCode: string,
@@ -173,6 +186,7 @@ export class MerchantController {
   }
 
   @Patch('orders/:orderCode/status')
+  @Permissions(Resource.ORDERS, Action.UPDATE)
   async updateOrderStatus(
     @CurrentUser() user: JwtUser,
     @Param('orderCode') orderCode: string,
@@ -181,3 +195,4 @@ export class MerchantController {
     return this.svc.updateOrderStatus(user.id, orderCode, body.status);
   }
 }
+

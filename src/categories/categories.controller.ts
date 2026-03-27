@@ -1,56 +1,47 @@
-import { Controller, Get, Post, Patch, Delete, Body, Param, UseGuards, Req, NotFoundException } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Body, Param, UseGuards, Req } from '@nestjs/common';
 import { CategoriesService } from './categories.service';
 import { CreateCategoryDto } from './dto/create-category.dto';
 import { UpdateCategoryDto } from './dto/update-category.dto';
 import { MerchantGuard } from '../merchant/guards/merchant.guard';
-import { PrismaService } from '../prisma/prisma.service';
+import { Action } from '../common/enums/action.enum';
+import { Resource } from '../common/enums/resource.enum';
+import { Permissions } from '../common/decorators/permissions.decorator';
 
 @Controller('merchant/categories')
 @UseGuards(MerchantGuard)
 export class CategoriesController {
   constructor(
     private readonly categoriesService: CategoriesService,
-    private readonly prisma: PrismaService,
   ) {}
 
-  private async getStoreId(userId: string): Promise<string> {
-    const merchant = await this.prisma.merchant.findUnique({
-      where: { userId },
-      include: { store: true },
-    });
-    if (!merchant || !merchant.store) {
-      throw new NotFoundException('Store not found for this merchant');
-    }
-    return merchant.store.id;
-  }
-
   @Get()
+  @Permissions(Resource.CATEGORIES, Action.READ)
   async getCategories(@Req() req) {
-    const storeId = await this.getStoreId(req.user.id);
-    return this.categoriesService.getCategories(storeId);
+    return this.categoriesService.getCategories(req.activeStore.id);
   }
 
   @Get(':id')
+  @Permissions(Resource.CATEGORIES, Action.READ)
   async getCategoryById(@Req() req, @Param('id') id: string) {
-    const storeId = await this.getStoreId(req.user.id);
-    return this.categoriesService.getCategoryById(storeId, id);
+    return this.categoriesService.getCategoryById(req.activeStore.id, id);
   }
 
   @Post()
+  @Permissions(Resource.CATEGORIES, Action.CREATE)
   async createCategory(@Req() req, @Body() dto: CreateCategoryDto) {
-    const storeId = await this.getStoreId(req.user.id);
-    return this.categoriesService.createCategory(storeId, dto);
+    return this.categoriesService.createCategory(req.activeStore.id, dto);
   }
 
   @Patch(':id')
+  @Permissions(Resource.CATEGORIES, Action.UPDATE)
   async updateCategory(@Req() req, @Param('id') id: string, @Body() dto: UpdateCategoryDto) {
-    const storeId = await this.getStoreId(req.user.id);
-    return this.categoriesService.updateCategory(storeId, id, dto);
+    return this.categoriesService.updateCategory(req.activeStore.id, id, dto);
   }
 
   @Delete(':id')
+  @Permissions(Resource.CATEGORIES, Action.DELETE)
   async deleteCategory(@Req() req, @Param('id') id: string) {
-    const storeId = await this.getStoreId(req.user.id);
-    return this.categoriesService.deleteCategory(storeId, id);
+    return this.categoriesService.deleteCategory(req.activeStore.id, id);
   }
 }
+

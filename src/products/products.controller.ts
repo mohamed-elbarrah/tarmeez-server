@@ -1,86 +1,75 @@
-import { Controller, Get, Post, Patch, Delete, Body, Param, Query, UseGuards, Req, NotFoundException } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Body, Param, Query, UseGuards, Req } from '@nestjs/common';
 import { ProductsService } from './products.service';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { CreateOfferDto } from './dto/create-offer.dto';
 import { MerchantGuard } from '../merchant/guards/merchant.guard';
 import { ProductStatus } from '@prisma/client';
-import { PrismaService } from '../prisma/prisma.service';
+import { Action } from '../common/enums/action.enum';
+import { Resource } from '../common/enums/resource.enum';
+import { Permissions } from '../common/decorators/permissions.decorator';
 
 @Controller('merchant/products')
 @UseGuards(MerchantGuard)
 export class ProductsController {
     constructor(
         private readonly productsService: ProductsService,
-        private readonly prisma: PrismaService,
     ) { }
 
-    private async getStoreId(userId: string): Promise<string> {
-        const merchant = await this.prisma.merchant.findUnique({
-            where: { userId },
-            include: { store: true },
-        });
-
-        if (!merchant || !merchant.store) {
-            throw new NotFoundException('Store not found for this merchant');
-        }
-
-        return merchant.store.id;
-    }
-
     @Get()
+    @Permissions(Resource.PRODUCTS, Action.READ)
     async getProducts(@Req() req, @Query('status') status?: ProductStatus) {
-        const storeId = await this.getStoreId(req.user.id);
-        return this.productsService.getProducts(storeId, status);
+        return this.productsService.getProducts(req.activeStore.id, status);
     }
 
     @Get(':id')
+    @Permissions(Resource.PRODUCTS, Action.READ)
     async getProductById(@Req() req, @Param('id') id: string) {
-        const storeId = await this.getStoreId(req.user.id);
-        return this.productsService.getProductById(storeId, id);
+        return this.productsService.getProductById(req.activeStore.id, id);
     }
 
     @Post()
+    @Permissions(Resource.PRODUCTS, Action.CREATE)
     async createProduct(@Req() req, @Body() dto: CreateProductDto) {
-        const storeId = await this.getStoreId(req.user.id);
-        return this.productsService.createProduct(storeId, dto);
+        return this.productsService.createProduct(req.activeStore.id, dto);
     }
 
     @Patch(':id')
+    @Permissions(Resource.PRODUCTS, Action.UPDATE)
     async updateProduct(@Req() req, @Param('id') id: string, @Body() dto: UpdateProductDto) {
-        const storeId = await this.getStoreId(req.user.id);
-        return this.productsService.updateProduct(storeId, id, dto);
+        return this.productsService.updateProduct(req.activeStore.id, id, dto);
     }
 
     @Delete(':id')
+    @Permissions(Resource.PRODUCTS, Action.DELETE)
     async deleteProduct(@Req() req, @Param('id') id: string) {
-        const storeId = await this.getStoreId(req.user.id);
-        return this.productsService.deleteProduct(storeId, id);
+        return this.productsService.deleteProduct(req.activeStore.id, id);
     }
 
     // ── Offers ──
 
     @Get(':id/offers')
+    @Permissions(Resource.PRODUCTS, Action.READ)
     async getOffers(@Req() req, @Param('id') id: string) {
-        const storeId = await this.getStoreId(req.user.id);
-        return this.productsService.getOffers(storeId, id);
+        return this.productsService.getOffers(req.activeStore.id, id);
     }
 
     @Post(':id/offers')
+    @Permissions(Resource.PRODUCTS, Action.CREATE)
     async createOffer(@Req() req, @Param('id') id: string, @Body() dto: CreateOfferDto) {
-        const storeId = await this.getStoreId(req.user.id);
-        return this.productsService.createOffer(storeId, id, dto);
+        return this.productsService.createOffer(req.activeStore.id, id, dto);
     }
 
     @Patch(':id/offers/:offerId')
+    @Permissions(Resource.PRODUCTS, Action.UPDATE)
     async updateOffer(@Req() req, @Param('id') id: string, @Param('offerId') offerId: string, @Body() dto: Partial<CreateOfferDto>) {
-        const storeId = await this.getStoreId(req.user.id);
-        return this.productsService.updateOffer(storeId, id, offerId, dto);
+        return this.productsService.updateOffer(req.activeStore.id, id, offerId, dto);
     }
 
     @Delete(':id/offers/:offerId')
+    @Permissions(Resource.PRODUCTS, Action.DELETE)
     async deleteOffer(@Req() req, @Param('id') id: string, @Param('offerId') offerId: string) {
-        const storeId = await this.getStoreId(req.user.id);
-        return this.productsService.deleteOffer(storeId, id, offerId);
+        return this.productsService.deleteOffer(req.activeStore.id, id, offerId);
     }
 }
+

@@ -3,12 +3,14 @@ import {
   Get,
   Query,
   UseGuards,
-  NotFoundException,
+  Req,
 } from '@nestjs/common'
 import { MerchantGuard } from '../merchant/guards/merchant.guard'
 import { CurrentUser } from '../auth/decorators/current-user.decorator'
 import { AnalyticsQueryService } from './analytics-query.service'
-import { PrismaService } from '../prisma/prisma.service'
+import { Action } from '../common/enums/action.enum'
+import { Resource } from '../common/enums/resource.enum'
+import { Permissions } from '../common/decorators/permissions.decorator'
 
 type JwtUser = { id: string; email?: string; role?: string }
 
@@ -17,77 +19,73 @@ type JwtUser = { id: string; email?: string; role?: string }
 export class MerchantAnalyticsController {
   constructor(
     private analyticsQueryService: AnalyticsQueryService,
-    private prisma: PrismaService,
   ) {}
 
-  /** Resolve merchant's storeId from JWT userId — queries regular PrismaService (ANALYTICS-RULE 1) */
-  private async getStoreId(userId: string): Promise<string> {
-    const merchant = await this.prisma.merchant.findUnique({
-      where: { userId },
-      include: { store: { select: { id: true } } },
-    })
-    if (!merchant?.store) throw new NotFoundException('Store not found')
-    return merchant.store.id
-  }
-
   @Get('overview')
+  @Permissions(Resource.ANALYTICS, Action.READ)
   async getOverview(
     @CurrentUser() user: JwtUser,
+    @Req() req: any,
     @Query('period') period = '7d',
   ) {
-    const storeId = await this.getStoreId(user.id)
-    return this.analyticsQueryService.getOverview(storeId, period)
+    return this.analyticsQueryService.getOverview(req.activeStore.id, period)
   }
 
   @Get('traffic')
+  @Permissions(Resource.ANALYTICS, Action.READ)
   async getTraffic(
     @CurrentUser() user: JwtUser,
+    @Req() req: any,
     @Query('period') period = '7d',
   ) {
-    const storeId = await this.getStoreId(user.id)
-    return this.analyticsQueryService.getTraffic(storeId, period)
+    return this.analyticsQueryService.getTraffic(req.activeStore.id, period)
   }
 
   @Get('pages')
+  @Permissions(Resource.ANALYTICS, Action.READ)
   async getPages(
     @CurrentUser() user: JwtUser,
+    @Req() req: any,
     @Query('period') period = '7d',
   ) {
-    const storeId = await this.getStoreId(user.id)
-    return this.analyticsQueryService.getPages(storeId, period)
+    return this.analyticsQueryService.getPages(req.activeStore.id, period)
   }
 
   @Get('funnel')
+  @Permissions(Resource.ANALYTICS, Action.READ)
   async getFunnel(
     @CurrentUser() user: JwtUser,
+    @Req() req: any,
     @Query('period') period = '7d',
   ) {
-    const storeId = await this.getStoreId(user.id)
-    return this.analyticsQueryService.getFunnel(storeId, period)
+    return this.analyticsQueryService.getFunnel(req.activeStore.id, period)
   }
 
   @Get('sales')
+  @Permissions(Resource.ANALYTICS, Action.READ)
   async getSales(
     @CurrentUser() user: JwtUser,
+    @Req() req: any,
     @Query('period') period = '30d',
   ) {
-    const storeId = await this.getStoreId(user.id)
-    return this.analyticsQueryService.getSales(storeId, period)
+    return this.analyticsQueryService.getSales(req.activeStore.id, period)
   }
 
   @Get('heatmap')
+  @Permissions(Resource.ANALYTICS, Action.READ)
   async getHeatmap(
     @CurrentUser() user: JwtUser,
+    @Req() req: any,
     @Query('page') page = '/',
     @Query('type') type = 'CLICK',
     @Query('device') device = 'DESKTOP',
   ) {
-    const storeId = await this.getStoreId(user.id)
     return this.analyticsQueryService.getHeatmap(
-      storeId,
+      req.activeStore.id,
       page,
       type.toUpperCase(),
       device.toUpperCase(),
     )
   }
 }
+

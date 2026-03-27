@@ -14,6 +14,9 @@ import type { Request } from 'express';
 import { TeamService } from './team.service';
 import { InviteTeamMemberDto } from './dto/invite-team-member.dto';
 import { MerchantGuard } from '../merchant/guards/merchant.guard';
+import { Action } from '../common/enums/action.enum';
+import { Resource } from '../common/enums/resource.enum';
+import { Permissions } from '../common/decorators/permissions.decorator';
 
 @Controller('merchant/team')
 @UseGuards(MerchantGuard)
@@ -23,9 +26,9 @@ export class TeamController {
   /**
    * POST /merchant/team/invite
    * Invite a new member to the store team.
-   * storeId is resolved by MerchantGuard — never read from the JWT payload.
    */
   @Post('invite')
+  @Permissions(Resource.TEAM, Action.CREATE)
   @HttpCode(HttpStatus.CREATED)
   invite(@Req() req: Request, @Body() dto: InviteTeamMemberDto) {
     return this.teamService.inviteMember(req.activeStore.id, req.user.id, dto);
@@ -36,6 +39,7 @@ export class TeamController {
    * List all members of the store.
    */
   @Get('members')
+  @Permissions(Resource.TEAM, Action.READ)
   listMembers(@Req() req: Request) {
     return this.teamService.listMembers(req.activeStore.id);
   }
@@ -45,6 +49,7 @@ export class TeamController {
    * List all pending/sent invitations.
    */
   @Get('invitations')
+  @Permissions(Resource.TEAM, Action.READ)
   listInvitations(@Req() req: Request) {
     return this.teamService.listInvitations(req.activeStore.id);
   }
@@ -54,6 +59,7 @@ export class TeamController {
    * Remove a member from the store team.
    */
   @Delete('members/:id')
+  @Permissions(Resource.TEAM, Action.DELETE)
   removeMember(@Req() req: Request, @Param('id') memberId: string) {
     return this.teamService.removeMember(req.activeStore.id, memberId);
   }
@@ -63,7 +69,9 @@ export class TeamController {
    * Cancel a pending invitation.
    */
   @Delete('invitations/:id')
+  @Permissions(Resource.TEAM, Action.DELETE)
   cancelInvitation(@Req() req: Request, @Param('id') invitationId: string) {
     return this.teamService.cancelInvitation(req.activeStore.id, invitationId);
   }
 }
+

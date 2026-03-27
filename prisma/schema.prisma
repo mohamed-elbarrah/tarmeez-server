@@ -152,6 +152,17 @@ model Store {
   fontFamily     String?
   borderRadius   String?
   enabledPaymentMethods String[] @default(["cash_on_delivery"])
+  
+  // Store Settings MVP
+  supportEmail   String?
+  supportWhatsapp String?
+  socialLinks    Json?      @default("[]")
+  systemCurrency String     @default("SAR")
+  currencyIcon   String?
+  taxNumber      String?
+  taxPercentage  Float      @default(15.0)
+  isTaxEnabled   Boolean    @default(false)
+
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 

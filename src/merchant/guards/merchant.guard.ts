@@ -91,6 +91,7 @@ export class MerchantGuard extends JwtAuthGuard {
 
     // ADMIN/OWNER: Full access (*)
     if (role === StoreRole.ADMIN || role === StoreRole.OWNER) {
+      this.logger.log(`Access GRANTED (Superuser): ${user.email} as ${role} for ${resource}:${action}`);
       return true;
     }
 

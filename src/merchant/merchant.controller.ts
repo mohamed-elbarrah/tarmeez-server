@@ -27,6 +27,9 @@ import { IsNotEmpty, IsString } from 'class-validator';
 import { Action } from '../common/enums/action.enum';
 import { Resource } from '../common/enums/resource.enum';
 import { Permissions } from '../common/decorators/permissions.decorator';
+import { UpdateSettingsDto } from './dto/update-settings.dto';
+import { UploadService } from '../utils/upload.service';
+
 
 type JwtUser = { id: string; email?: string; role?: string };
 
@@ -89,48 +92,34 @@ export class MerchantController {
     return this.svc.updateStoreCustomization(user.id, dto);
   }
 
+  @Get('settings')
+  @Permissions(Resource.SETTINGS, Action.READ)
+  async getSettings(@CurrentUser() user: JwtUser, @Req() req: Request) {
+    return this.svc.getSettings(user.id, req.activeStore.id);
+  }
+
+  @Patch('settings')
+  @Permissions(Resource.SETTINGS, Action.UPDATE)
+  async updateSettings(
+    @CurrentUser() user: JwtUser,
+    @Req() req: Request,
+    @Body() dto: UpdateSettingsDto,
+  ) {
+    return this.svc.updateSettings(user.id, req.activeStore.id, dto);
+  }
+
   @Post('store/upload-image')
   @Permissions(Resource.SETTINGS, Action.UPDATE)
-  @UseInterceptors(
-    FileInterceptor('file', {
-      storage: diskStorage({
-        destination: (req, file, cb) => {
-          const user: any = (req as any).user || {};
-          const merchantId = user.id || 'unknown';
-          const dir = `uploads/stores/${merchantId}`;
-          try {
-            fs.mkdirSync(dir, { recursive: true });
-          } catch (e) {
-            // ignore
-          }
-          cb(null, dir);
-        },
-        filename: (req, file, cb) => {
-          const timestamp = Date.now();
-          const safeName = file.originalname.replace(/\s+/g, '-');
-          cb(null, `${timestamp}-${safeName}`);
-        },
-      }),
-      fileFilter: (req, file, cb) => {
-        const allowed = ['.jpg', '.jpeg', '.png', '.svg', '.ico', '.webp'];
-        const ext = extname(file.originalname).toLowerCase();
-        if (!allowed.includes(ext)) {
-          return cb(new BadRequestException('Invalid file type'), false as any);
-        }
-        cb(null, true as any);
-      },
-      limits: { fileSize: 2 * 1024 * 1024 },
-    }),
-  )
+  @UseInterceptors(FileInterceptor('file', UploadService.getMulterOptions()))
   async uploadStoreImage(
     @CurrentUser() user: JwtUser,
     @UploadedFile() file: Express.Multer.File,
   ) {
     if (!file) throw new BadRequestException('No file uploaded');
-    const baseUrl = process.env.SERVER_URL ?? 'http://localhost:8000';
-    const url = `${baseUrl}/uploads/stores/${user.id}/${file.filename}`;
-    return { url };
+    const relativePath = UploadService.getRelativePath(file.filename);
+    return { url: relativePath };
   }
+
 
   @Get('store/payment-methods')
   @Permissions(Resource.SETTINGS, Action.READ)

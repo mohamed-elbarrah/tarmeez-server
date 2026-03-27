@@ -29,6 +29,7 @@ export interface AuthUserResponse {
     storeName: string;
     storeSlug: string;
   } | null;
+  currentRole?: StoreRole;
 }
 
 export interface CustomerAuthResponse {
@@ -95,6 +96,15 @@ export class AuthService {
           }
         : null,
     };
+
+    // Resolve currentRole in the active store
+    const membership = await this.prisma.storeMember.findFirst({
+      where: { userId: user.id },
+      select: { role: true },
+    });
+    if (membership) {
+      userResp.currentRole = membership.role;
+    }
 
     return {
       accessToken: tokens.accessToken,
@@ -188,6 +198,7 @@ export class AuthService {
         storeName: result.merchant.storeName,
         storeSlug: result.merchant.storeSlug,
       },
+      currentRole: StoreRole.OWNER,
     };
 
     return {
@@ -434,6 +445,13 @@ export class AuthService {
       status: customer.status,
       createdAt: customer.createdAt,
     };
+  }
+
+  async findStoreRole(userId: string) {
+    return this.prisma.storeMember.findFirst({
+      where: { userId },
+      select: { role: true },
+    });
   }
 
   async logout(userId: string) {

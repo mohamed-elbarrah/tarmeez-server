@@ -188,6 +188,12 @@ export class AuthController {
       );
       return { ...user, customer: profile };
     }
+
+    if (user?.role === 'MERCHANT') {
+      const membership = await this.authService.findStoreRole(user.id);
+      return { ...user, currentRole: membership?.role };
+    }
+
     return user;
   }
 }

@@ -3,6 +3,8 @@ import { PrismaService } from '../prisma/prisma.service';
 import { PaymentRegistry } from '../payments/payment.registry';
 
 import { OrderStatus } from '@prisma/client';
+import { UpdateSettingsDto } from './dto/update-settings.dto';
+
 
 @Injectable()
 export class MerchantService {
@@ -357,6 +359,63 @@ export class MerchantService {
       select: { id: true, themeId: true },
     });
 
+
     return { storeId: updated.id, themeId: updated.themeId };
+  }
+
+  async getSettings(userId: string, storeId: string) {
+    const store = await this.prisma.store.findUnique({
+      where: { id: storeId },
+      select: {
+        id: true,
+        slug: true,
+        name: true,
+        logo: true,
+        favicon: true,
+        supportEmail: true,
+        supportWhatsapp: true,
+        socialLinks: true,
+        systemCurrency: true,
+        currencyIcon: true,
+        taxNumber: true,
+        taxPercentage: true,
+        isTaxEnabled: true,
+      },
+    });
+
+    if (!store) {
+      throw new NotFoundException('Store not found');
+    }
+
+    return store;
+  }
+
+  async updateSettings(userId: string, storeId: string, dto: UpdateSettingsDto) {
+    // Cast to any to avoid TS errors until client is regenerated
+    const data: any = {
+      logo: dto.logo,
+      favicon: dto.favicon,
+      supportEmail: dto.supportEmail,
+      supportWhatsapp: dto.supportWhatsapp,
+      socialLinks: dto.socialLinks,
+      systemCurrency: dto.systemCurrency,
+      currencyIcon: dto.currencyIcon,
+      taxNumber: dto.taxNumber,
+      taxPercentage: dto.taxPercentage,
+      isTaxEnabled: dto.isTaxEnabled,
+    };
+
+
+    // Filter out undefined values to only update provided fields
+    Object.keys(data).forEach((key) => {
+      if (data[key] === undefined) delete data[key];
+    });
+
+    const updated = await this.prisma.store.update({
+      where: { id: storeId },
+      data,
+    });
+
+    return updated;
   }
 }

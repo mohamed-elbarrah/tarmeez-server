@@ -17,6 +17,7 @@ const THEMES = [
   {
     slug: 'default',
     name: 'القالب الافتراضي',
+    description: 'القالب الأساسي لجميع أنواع المتاجر الإلكترونية.',
     previewImage: null,
     defaultConfig: {
       primary: '#2563eb',
@@ -34,8 +35,10 @@ const THEMES = [
     isActive: true,
   },
   {
-    slug: 'modern',
-    name: 'القالب العصري',
+    slug: 'charity',
+    name: 'قالب الجمعيات الخيرية',
+    description:
+      'قالب احترافي مخصص للمؤسسات الخيرية والوقفية لإدارة التبرعات والمشاريع.',
     previewImage: null,
     defaultConfig: {
       primary: '#10b981',
@@ -62,6 +65,7 @@ async function main() {
       where: { slug: theme.slug },
       update: {
         name: theme.name,
+        description: theme.description,
         defaultConfig: theme.defaultConfig,
         isActive: theme.isActive,
       },

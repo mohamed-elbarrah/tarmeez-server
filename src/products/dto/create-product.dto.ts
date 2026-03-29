@@ -92,6 +92,9 @@ export class CreateProductDto {
   @IsOptional()
   seoDesc?: string;
 
+  @IsOptional()
+  donationMetadata?: Record<string, any>;
+
   @IsArray()
   @IsOptional()
   @ValidateNested({ each: true })

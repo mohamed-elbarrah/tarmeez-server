@@ -5,7 +5,6 @@ import { PaymentRegistry } from '../payments/payment.registry';
 import { OrderStatus } from '@prisma/client';
 import { UpdateSettingsDto } from './dto/update-settings.dto';
 
-
 @Injectable()
 export class MerchantService {
   constructor(private prisma: PrismaService) {}
@@ -172,6 +171,7 @@ export class MerchantService {
           buttonColor: store.buttonColor,
           fontFamily: store.fontFamily,
           borderRadius: store.borderRadius,
+          activityType: store.activityType ?? 'RETAIL',
         },
       };
     }
@@ -221,6 +221,7 @@ export class MerchantService {
         buttonColor: store.buttonColor,
         fontFamily: store.fontFamily,
         borderRadius: store.borderRadius,
+        activityType: store.activityType ?? 'RETAIL',
       },
     };
   }
@@ -353,14 +354,20 @@ export class MerchantService {
       );
     }
 
+    // Determine activityType based on theme slug
+    const activityType = theme.slug === 'charity' ? 'CHARITY' : 'RETAIL';
+
     const updated = await this.prisma.store.update({
       where: { id: merchant.store.id },
-      data: { themeId } as any,
-      select: { id: true, themeId: true },
+      data: { themeId, activityType } as any,
+      select: { id: true, themeId: true, activityType: true },
     });
 
-
-    return { storeId: updated.id, themeId: updated.themeId };
+    return {
+      storeId: updated.id,
+      themeId: updated.themeId,
+      activityType: (updated as any).activityType,
+    };
   }
 
   async getSettings(userId: string, storeId: string) {
@@ -390,7 +397,11 @@ export class MerchantService {
     return store;
   }
 
-  async updateSettings(userId: string, storeId: string, dto: UpdateSettingsDto) {
+  async updateSettings(
+    userId: string,
+    storeId: string,
+    dto: UpdateSettingsDto,
+  ) {
     // Cast to any to avoid TS errors until client is regenerated
     const data: any = {
       logo: dto.logo,
@@ -404,7 +415,6 @@ export class MerchantService {
       taxPercentage: dto.taxPercentage,
       isTaxEnabled: dto.isTaxEnabled,
     };
-
 
     // Filter out undefined values to only update provided fields
     Object.keys(data).forEach((key) => {

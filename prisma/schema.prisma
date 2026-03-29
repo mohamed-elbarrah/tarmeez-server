@@ -25,6 +25,11 @@ enum ProductStatus {
   ARCHIVED
 }
 
+enum ActivityType {
+  RETAIL
+  CHARITY
+}
+
 enum CustomerStatus {
   ACTIVE
   BANNED
@@ -114,8 +119,9 @@ model Merchant {
 // ─── Theme System ────────────────────────────────────────────────────────────
 model Theme {
   id            String   @id @default(uuid())
-  slug          String   @unique   // e.g. 'default', 'modern-dark'
+  slug          String   @unique   // e.g. 'default', 'charity'
   name          String
+  description   String?
   previewImage  String?
   defaultConfig Json     @default("{}") // ThemeConfig JSON (colors, fonts, etc.)
   isActive      Boolean  @default(true)
@@ -151,6 +157,7 @@ model Store {
   accentColor    String?
   fontFamily     String?
   borderRadius   String?
+  activityType  ActivityType @default(RETAIL)
   enabledPaymentMethods String[] @default(["cash_on_delivery"])
   
   // Store Settings MVP
@@ -288,6 +295,7 @@ model Product {
   status       ProductStatus @default(DRAFT)
   seoTitle     String?
   seoDesc      String?
+  donationMetadata Json?     // { isDonation, targetAmount, currentAmount, donationOptions, allowCustomAmount, progressMessages }
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
 

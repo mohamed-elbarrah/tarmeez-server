@@ -40,6 +40,7 @@ export class StoresService {
             slug: true,
             category: true,
             status: true,
+            donationMetadata: true,
             createdAt: true,
             offers: {
               where: { isActive: true },
@@ -106,6 +107,7 @@ export class StoresService {
       headingColor: s.headingColor,
       buttonColor: s.buttonColor,
       merchant: s.merchant,
+      activityType: s.activityType ?? 'RETAIL',
       products: productsWithRating,
       categories: s.categories,
     };

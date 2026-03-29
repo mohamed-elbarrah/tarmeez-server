@@ -13,6 +13,7 @@ export class ThemesService {
         id: true,
         slug: true,
         name: true,
+        description: true,
         previewImage: true,
         defaultConfig: true,
         createdAt: true,

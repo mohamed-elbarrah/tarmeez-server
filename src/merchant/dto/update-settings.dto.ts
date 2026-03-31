@@ -6,6 +6,7 @@ import {
   ValidateNested,
   IsNumber,
   IsBoolean,
+  IsEnum,
   Min,
   Max,
 } from 'class-validator';
@@ -21,6 +22,33 @@ class SocialLinkDto {
   @IsString()
   @IsOptional()
   icon?: string;
+}
+
+class CheckoutFieldItemDto {
+  @IsString()
+  id!: string;
+
+  @IsEnum(['text', 'phone', 'email', 'textarea', 'address'])
+  type!: string;
+
+  @IsString()
+  label!: string;
+
+  @IsString()
+  @IsOptional()
+  placeholder?: string;
+
+  @IsBoolean()
+  enabled!: boolean;
+
+  @IsBoolean()
+  required!: boolean;
+
+  @IsBoolean()
+  isCustom!: boolean;
+
+  @IsNumber()
+  sortOrder!: number;
 }
 
 export class UpdateSettingsDto {
@@ -76,4 +104,10 @@ export class UpdateSettingsDto {
   @IsOptional()
   @Type(() => Boolean)
   isTaxEnabled?: boolean;
+
+  @IsArray()
+  @IsOptional()
+  @ValidateNested({ each: true })
+  @Type(() => CheckoutFieldItemDto)
+  checkoutFieldsConfig?: CheckoutFieldItemDto[];
 }

@@ -387,6 +387,7 @@ export class MerchantService {
         taxNumber: true,
         taxPercentage: true,
         isTaxEnabled: true,
+        checkoutFieldsConfig: true,
       },
     });
 
@@ -414,6 +415,7 @@ export class MerchantService {
       taxNumber: dto.taxNumber,
       taxPercentage: dto.taxPercentage,
       isTaxEnabled: dto.isTaxEnabled,
+      checkoutFieldsConfig: dto.checkoutFieldsConfig,
     };
 
     // Filter out undefined values to only update provided fields

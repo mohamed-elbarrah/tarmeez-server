@@ -18,7 +18,45 @@ export class OrdersService {
     const store = await this.prisma.store.findUnique({ where: { slug: dto.storeSlug } })
     if (!store) throw new NotFoundException('المتجر غير موجود')
 
-    // 2. Verify payment method is enabled for THIS store
+    // 2. Dynamic field validation against merchant's checkoutFieldsConfig
+    const rawConfig = store.checkoutFieldsConfig
+    const fieldConfig: Array<{ id: string; label: string; enabled: boolean; required: boolean; isCustom: boolean }> =
+      Array.isArray(rawConfig) && rawConfig.length > 0
+        ? (rawConfig as any[])
+        : [
+            { id: 'name',    label: 'الاسم الكامل', enabled: true, required: true,  isCustom: false },
+            { id: 'phone',   label: 'رقم الجوال',   enabled: true, required: true,  isCustom: false },
+            { id: 'email',   label: 'البريد الإلكتروني', enabled: true, required: false, isCustom: false },
+            { id: 'address', label: 'العنوان',        enabled: true, required: true,  isCustom: false },
+          ]
+
+    for (const field of fieldConfig) {
+      if (!field.enabled || !field.required) continue
+      switch (field.id) {
+        case 'name':
+          if (!dto.customerName?.trim())
+            throw new BadRequestException(`${field.label} مطلوب`)
+          break
+        case 'phone':
+          if (!dto.customerPhone?.trim())
+            throw new BadRequestException(`${field.label} مطلوب`)
+          break
+        case 'email':
+          if (!dto.customerEmail?.trim())
+            throw new BadRequestException(`${field.label} مطلوب`)
+          break
+        case 'address':
+          if (!dto.shippingAddress?.city?.trim() || !dto.shippingAddress?.region?.trim() || !dto.shippingAddress?.street?.trim())
+            throw new BadRequestException(`${field.label} — يرجى إدخال المدينة والمنطقة والشارع`)
+          break
+        default:
+          // Custom fields: value must appear in customFields map
+          if (!dto.customFields?.[field.id]?.toString()?.trim())
+            throw new BadRequestException(`${field.label} مطلوب`)
+      }
+    }
+
+    // 3. Verify payment method is enabled for THIS store
     if (!store.enabledPaymentMethods.includes(dto.paymentMethod)) {
       throw new BadRequestException('طريقة الدفع غير متاحة في هذا المتجر')
     }
@@ -109,10 +147,10 @@ export class OrdersService {
           customerName: dto.customerName,
           customerPhone: dto.customerPhone,
           customerEmail: dto.customerEmail,
-          shippingCity: dto.shippingAddress.city,
-          shippingRegion: dto.shippingAddress.region,
-          shippingStreet: dto.shippingAddress.street,
-          shippingBuilding: dto.shippingAddress.building,
+          shippingCity: dto.shippingAddress?.city ?? null,
+          shippingRegion: dto.shippingAddress?.region ?? null,
+          shippingStreet: dto.shippingAddress?.street ?? null,
+          shippingBuilding: dto.shippingAddress?.building ?? null,
           paymentMethod: dto.paymentMethod,
           paymentStatus: 'PENDING',
           transactionId: paymentResult.transactionId,
@@ -122,6 +160,7 @@ export class OrdersService {
           couponCode: dto.couponCode ?? null,
           couponDiscount: couponDiscount,
           notes: dto.notes,
+          customFields: dto.customFields || undefined,
           status: 'PENDING',
           items: {
             create: orderItems
@@ -139,7 +178,7 @@ export class OrdersService {
       }
 
       return newOrder
-    })
+    }) as any
 
     // Record coupon usage after transaction succeeds
     if (dto.couponCode && couponValidation?.valid && couponValidation.couponId) {

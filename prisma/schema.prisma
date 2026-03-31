@@ -170,6 +170,9 @@ model Store {
   taxPercentage  Float      @default(15.0)
   isTaxEnabled   Boolean    @default(false)
 
+  // Checkout Configuration
+  checkoutFieldsConfig Json? @default("[]")
+
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
@@ -202,10 +205,13 @@ model Order {
   customerPhone   String
 
   // Shipping address (snapshot)
-  shippingCity    String
-  shippingRegion  String
-  shippingStreet  String
+  shippingCity    String?
+  shippingRegion  String?
+  shippingStreet  String?
   shippingBuilding String?
+
+  // Custom merchant-defined fields captured at order time
+  customFields    Json?
 
   paymentMethod   String
   paymentStatus   PaymentStatus @default(PENDING)

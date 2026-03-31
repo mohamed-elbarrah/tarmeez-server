@@ -108,6 +108,7 @@ export class StoresService {
       buttonColor: s.buttonColor,
       merchant: s.merchant,
       activityType: s.activityType ?? 'RETAIL',
+      checkoutFieldsConfig: s.checkoutFieldsConfig ?? null,
       products: productsWithRating,
       categories: s.categories,
     };

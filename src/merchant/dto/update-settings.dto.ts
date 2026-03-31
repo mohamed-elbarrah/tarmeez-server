@@ -54,23 +54,22 @@ class CheckoutFieldItemDto {
 export class UpdateSettingsDto {
   @IsString()
   @IsOptional()
-  @Transform(({ value }) => value === '' ? null : value)
+  @Transform(({ value }) => (value === '' ? null : value))
   logo?: string | null;
 
   @IsString()
   @IsOptional()
-  @Transform(({ value }) => value === '' ? null : value)
+  @Transform(({ value }) => (value === '' ? null : value))
   favicon?: string | null;
 
   @IsEmail()
   @IsOptional()
-
-  @Transform(({ value }) => value === '' ? null : value)
+  @Transform(({ value }) => (value === '' ? null : value))
   supportEmail?: string | null;
 
   @IsString()
   @IsOptional()
-  @Transform(({ value }) => value === '' ? null : value)
+  @Transform(({ value }) => (value === '' ? null : value))
   supportWhatsapp?: string | null;
 
   @IsArray()
@@ -85,12 +84,12 @@ export class UpdateSettingsDto {
 
   @IsString()
   @IsOptional()
-  @Transform(({ value }) => value === '' ? null : value)
+  @Transform(({ value }) => (value === '' ? null : value))
   currencyIcon?: string | null;
 
   @IsString()
   @IsOptional()
-  @Transform(({ value }) => value === '' ? null : value)
+  @Transform(({ value }) => (value === '' ? null : value))
   taxNumber?: string | null;
 
   @IsNumber()

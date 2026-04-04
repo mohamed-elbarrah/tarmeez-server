@@ -1,4 +1,10 @@
-import { Injectable, NotFoundException, ForbiddenException, BadRequestException, ConflictException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ForbiddenException,
+  BadRequestException,
+  ConflictException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreatePageDto } from './dto/create-page.dto';
 import { UpdatePageDto } from './dto/update-page.dto';
@@ -21,13 +27,14 @@ export class PagesService {
     return merchant.store.id;
   }
 
-
   async createPage(dto: CreatePageDto, userId: string) {
     const storeId = await this.getStoreIdByMerchant(userId);
 
     if (dto.type === PageType.LANDING) {
       if (!dto.linkedProductId) {
-        throw new BadRequestException('linkedProductId is required for LANDING pages');
+        throw new BadRequestException(
+          'linkedProductId is required for LANDING pages',
+        );
       }
 
       // Verify product exists AND belongs to this store
@@ -59,7 +66,10 @@ export class PagesService {
         storeId,
         slug,
         status: PageStatus.DRAFT,
-        content: (dto.content as any) || { version: 1, puckData: { content: [], root: { props: {} } } },
+        content: (dto.content as any) || {
+          version: 1,
+          puckData: { content: [], root: { props: {} } },
+        },
       },
     });
   }
@@ -79,7 +89,8 @@ export class PagesService {
     });
 
     if (!page) throw new NotFoundException('Page not found');
-    if (page.storeId !== storeId) throw new ForbiddenException('You do not own this page');
+    if (page.storeId !== storeId)
+      throw new ForbiddenException('You do not own this page');
 
     return page;
   }
@@ -129,7 +140,11 @@ export class PagesService {
     });
   }
 
-  async updatePageStatus(pageId: string, dto: UpdatePageStatusDto, userId: string) {
+  async updatePageStatus(
+    pageId: string,
+    dto: UpdatePageStatusDto,
+    userId: string,
+  ) {
     const page = await this.getPage(pageId, userId);
 
     const currentStatus = page.status;
@@ -141,7 +156,10 @@ export class PagesService {
     // PUBLISHED -> ARCHIVED: allowed
     // ARCHIVED -> DRAFT: allowed
     // ARCHIVED -> PUBLISHED: NOT allowed directly
-    if (currentStatus === PageStatus.ARCHIVED && newStatus === PageStatus.PUBLISHED) {
+    if (
+      currentStatus === PageStatus.ARCHIVED &&
+      newStatus === PageStatus.PUBLISHED
+    ) {
       throw new BadRequestException('يجب استعادة الصفحة إلى مسودة أولاً');
     }
 
@@ -163,6 +181,90 @@ export class PagesService {
     });
 
     return { message: 'Page deleted successfully' };
+  }
+
+  /**
+   * Returns the store's home page, creating it with a default v2 template if
+   * it does not yet exist.  This is the safe entry-point for the "Customize
+   * Home Page" button in the merchant dashboard.
+   *
+   * @param storeId — comes directly from req.activeStore.id (already validated
+   *   by MerchantGuard), so no secondary store lookup is needed here.
+   */
+  async getOrCreateHomePage(storeId: string) {
+    const existing = await this.prisma.page.findUnique({
+      where: { storeId_slug: { storeId, slug: 'home' } },
+    });
+
+    if (existing) return existing;
+
+    const defaultContent = {
+      version: 2,
+      puckData: {
+        root: { props: {} },
+        content: [
+          {
+            type: 'HeroBanner',
+            props: {
+              id: 'hero-home',
+              title: 'مرحباً بكم في متجرنا',
+              subtitle: 'اكتشف أفضل المنتجات بأفضل الأسعار',
+              backgroundColor: 'primary',
+              overlayOpacity: 'none',
+              textColor: 'white',
+              buttonLabel: 'تسوق الآن',
+              buttonHref: '#',
+              showButton: true,
+              minHeight: 'md',
+              contentAlign: 'center',
+            },
+          },
+          {
+            type: 'CategoriesSliderBlock',
+            props: {
+              id: 'cats-home',
+              title: 'تسوق حسب الفئة',
+              showViewAll: true,
+              viewAllLabel: 'عرض الكل',
+              imageRadius: 'full',
+              itemsPerRow: '6',
+            },
+          },
+          {
+            type: 'ProductsSectionBlock',
+            props: {
+              id: 'products-home',
+              title: 'عروض حصرية',
+              showTitle: true,
+              showViewAll: true,
+              viewAllLabel: 'عرض المزيد',
+              icon: '⚡',
+              iconBgColor: 'red',
+              limit: 8,
+              colsMobile: '2',
+              colsTablet: '3',
+              colsDesktop: '4',
+              gap: 'md',
+              sortBy: 'newest',
+              filterByCategory: '',
+            },
+          },
+        ],
+      },
+    };
+
+    return this.prisma.page.create({
+      data: {
+        storeId,
+        slug: 'home',
+        title: 'الصفحة الرئيسية',
+        type: PageType.CUSTOM,
+        status: PageStatus.DRAFT,
+        showHeader: false,
+        showFooter: false,
+        content: defaultContent as any,
+      },
+    });
   }
 
   async getPublicPage(storeSlug: string, pageSlug: string) {

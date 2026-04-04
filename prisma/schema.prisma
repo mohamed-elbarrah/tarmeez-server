@@ -227,6 +227,8 @@ model Order {
   couponDiscount  Float?      @default(0)
   couponUsage     CouponUsage?
 
+  isAnonymous     Boolean     @default(false)
+
   items           OrderItem[]
   createdAt       DateTime    @default(now())
   updatedAt       DateTime    @updatedAt

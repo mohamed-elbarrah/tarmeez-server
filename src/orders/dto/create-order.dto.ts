@@ -1,6 +1,7 @@
 import { Type } from 'class-transformer';
 import {
   IsArray,
+  IsBoolean,
   IsEmail,
   IsInt,
   IsNotEmpty,
@@ -40,4 +41,5 @@ export class CreateOrderDto {
   @IsString() storeSlug: string;
   @IsOptional() @IsString() couponCode?: string;
   @IsOptional() @IsObject() customFields?: Record<string, any>;
+  @IsOptional() @IsBoolean() isAnonymous?: boolean;
 }

@@ -140,9 +140,11 @@ export class LandingPageProcessor extends WorkerHost {
           title: pageTitle,
           slug,
           type: 'LANDING',
-          status: 'DRAFT',
+          status: 'PUBLISHED',
           content: normalized.data as any,
           linkedProductId: generation.productId ?? null,
+          createdAt: new Date(),
+          updatedAt: new Date(),
         },
       });
 

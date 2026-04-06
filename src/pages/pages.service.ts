@@ -267,20 +267,26 @@ export class PagesService {
     });
   }
 
-  async getPublicPage(storeSlug: string, pageSlug: string) {
-    const store = await this.prisma.store.findUnique({
-      where: { slug: storeSlug },
+  async getPublicPage(storeSlugOrId: string, pageSlugOrId: string) {
+    const store = await this.prisma.store.findFirst({
+      where: {
+        OR: [{ slug: storeSlugOrId }, { id: storeSlugOrId }],
+      },
     });
-
+    
     if (!store) {
       throw new NotFoundException('Store not found');
     }
 
     const page = await this.prisma.page.findFirst({
       where: {
-        slug: pageSlug,
-        storeId: store.id,
-        status: PageStatus.PUBLISHED,
+        AND: [
+          { storeId: store.id },
+          { status: PageStatus.PUBLISHED },
+          {
+            OR: [{ slug: pageSlugOrId }, { id: pageSlugOrId }],
+          },
+        ],
       },
     });
 

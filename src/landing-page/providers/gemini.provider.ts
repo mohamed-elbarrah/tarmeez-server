@@ -56,7 +56,10 @@ export class GeminiProvider implements AIProvider {
     if (!this._model) {
       const apiKey = this.config.getOrThrow<string>('GEMINI_API_KEY');
       const genAI = new GoogleGenerativeAI(apiKey);
-      this._model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
+      this._model = genAI.getGenerativeModel(
+        { model: 'gemini-1.5-flash' },
+        { apiVersion: 'v1' },
+      );
     }
     return this._model;
   }
@@ -122,13 +125,22 @@ export class GeminiProvider implements AIProvider {
     userPrompt: string,
     temperature: number,
   ): Promise<string> {
+    // 2-second delay to stay within free-tier per-minute rate limits
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+    this.logger.log(
+      `DEBUG: Calling Gemini API (model: gemini-1.5-flash, apiVersion: v1, temp: ${temperature})`,
+    );
     const model = this.getModel();
 
+    const combinedPrompt =
+      systemInstruction +
+      '\n\n' +
+      userPrompt +
+      '\n\nRespond ONLY with a raw JSON object. No markdown, no code blocks.';
+
     const result = await model.generateContent({
-      systemInstruction,
-      contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
+      contents: [{ role: 'user', parts: [{ text: combinedPrompt }] }],
       generationConfig: {
-        responseMimeType: 'application/json',
         temperature,
         maxOutputTokens: 4096,
       },

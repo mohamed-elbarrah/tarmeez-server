@@ -1,19 +1,35 @@
-export interface AIGenerationInput {
-  prompt: string;
-  productName?: string;
-  productDescription?: string;
-  productPrice?: number;
-  language: string;
-  tone: string;
-}
+import type {
+  ProductAnalysis,
+  PagePlan,
+  ProductContext,
+  SectionGenerationContext,
+} from '../prompts/types';
 
-export interface AIGenerationOutput {
-  raw: string;
-  parsed: unknown;
-}
+export type {
+  ProductAnalysis,
+  PagePlan,
+  ProductContext,
+  SectionGenerationContext,
+};
 
 export const AI_PROVIDER = Symbol('AI_PROVIDER');
 
 export interface AIProvider {
-  generate(input: AIGenerationInput): Promise<AIGenerationOutput>;
+  /** Step 1 — Extract audience, pain points, category from the merchant's prompt */
+  analyzeProduct(
+    merchantPrompt: string,
+    context: ProductContext,
+    language: string,
+    tone: string,
+  ): Promise<ProductAnalysis>;
+
+  /** Step 2 — Decide which sections to include and their order */
+  planPage(
+    analysis: ProductAnalysis,
+    language: string,
+    tone: string,
+  ): Promise<PagePlan>;
+
+  /** Step 3 — Generate content for a single section */
+  generateSection(ctx: SectionGenerationContext): Promise<unknown>;
 }

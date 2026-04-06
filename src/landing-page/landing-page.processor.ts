@@ -5,7 +5,8 @@ import { PrismaService } from '../prisma/prisma.service';
 import {
   AI_PROVIDER,
   type AIProvider,
-  type AIGenerationInput,
+  type ProductContext,
+  type SectionGenerationContext,
 } from './providers';
 import { LANDING_PAGE_QUEUE } from './landing-page.service';
 import { NormalizationService } from './normalization.service';
@@ -30,70 +31,126 @@ export class LandingPageProcessor extends WorkerHost {
 
   async process(job: Job<GenerationJobData>): Promise<void> {
     const { generationId, storeId } = job.data;
-    this.logger.log(`Processing generation ${generationId}`);
+    this.logger.log(`[${generationId}] Job received`);
 
-    // Mark as processing
+    // Mark as PROCESSING
     const generation = await this.prisma.landingPageGeneration.update({
       where: { id: generationId },
       data: { status: GenerationStatus.PROCESSING },
     });
 
     try {
-      // Gather product context if linked
-      let productContext: Partial<AIGenerationInput> = {};
-      if (generation.productId) {
-        const product = await this.prisma.product.findUnique({
-          where: { id: generation.productId },
-          select: { name: true, description: true, price: true },
-        });
-        if (product) {
-          productContext = {
-            productName: product.name,
-            productDescription: product.description ?? undefined,
-            productPrice: product.price ? Number(product.price) : undefined,
+      // ── Load product context ─────────────────────────────
+      const productContext = await this.loadProductContext(
+        generation.productId,
+      );
+
+      // ── Step 1: Analyze ──────────────────────────────────
+      this.logger.log(`[${generationId}] Step 1/3 — Analyzing product...`);
+      const analysis = await this.aiProvider.analyzeProduct(
+        generation.prompt,
+        productContext,
+        generation.language,
+        generation.tone,
+      );
+      this.logger.debug(
+        `[${generationId}] Analysis: category=${analysis.productCategory}, ` +
+          `audience=${analysis.targetAudience.slice(0, 60)}...`,
+      );
+
+      // ── Step 2: Plan ─────────────────────────────────────
+      this.logger.log(
+        `[${generationId}] Step 2/3 — Planning page structure...`,
+      );
+      const plan = await this.aiProvider.planPage(
+        analysis,
+        generation.language,
+        generation.tone,
+      );
+      this.logger.log(
+        `[${generationId}] Plan: ${plan.selectedSections.length} sections → ${plan.selectedSections.join(', ')}`,
+      );
+
+      // ── Step 3: Generate each section ────────────────────
+      this.logger.log(
+        `[${generationId}] Step 3/3 — Generating ${plan.selectedSections.length} sections...`,
+      );
+      const sections: unknown[] = [];
+      const sectionErrors: string[] = [];
+
+      for (const sectionType of plan.selectedSections) {
+        try {
+          const ctx: SectionGenerationContext = {
+            sectionType,
+            analysis,
+            language: generation.language,
+            tone: generation.tone,
+            ...productContext,
           };
+          const section = await this.aiProvider.generateSection(ctx);
+          sections.push(section);
+          this.logger.debug(`[${generationId}]   ✓ ${sectionType}`);
+        } catch (sectionErr) {
+          const msg =
+            sectionErr instanceof Error
+              ? sectionErr.message
+              : String(sectionErr);
+          this.logger.warn(`[${generationId}]   ✗ ${sectionType}: ${msg}`);
+          sectionErrors.push(`${sectionType}: ${msg}`);
+          // Normalization will handle partial results gracefully
         }
       }
 
-      // Call AI provider
-      const aiOutput = await this.aiProvider.generate({
-        prompt: generation.prompt,
-        language: generation.language,
-        tone: generation.tone,
-        ...productContext,
-      });
+      if (sections.length === 0) {
+        throw new Error(
+          `All section generations failed: ${sectionErrors.join('; ')}`,
+        );
+      }
 
-      // Normalize and validate
-      const normalized = this.normalization.normalize(aiOutput.parsed);
+      // ── Normalize & validate ─────────────────────────────
+      const rawOutput = {
+        sections,
+        metadata: { language: generation.language, tone: generation.tone },
+      };
+
+      const normalized = this.normalization.normalize(rawOutput);
 
       if (!normalized.success || !normalized.data) {
         const errorMsg = normalized.errors
           .map((e) => `[${e.section}] ${e.path}: ${e.message}`)
           .join('; ');
-        throw new Error(`AI output validation failed: ${errorMsg}`);
+        throw new Error(`Normalization failed: ${errorMsg}`);
       }
 
       if (normalized.warnings.length > 0) {
         this.logger.warn(
-          `Generation ${generationId} warnings: ${normalized.warnings.join(', ')}`,
+          `[${generationId}] Normalization warnings: ${normalized.warnings.join(', ')}`,
         );
       }
 
-      // Create a Page from the generated content
+      // ── Create Page ──────────────────────────────────────
       const slug = `ai-landing-${generationId.slice(0, 8)}-${Date.now()}`;
+      const pageTitle = productContext.productName
+        ? `AI Page — ${productContext.productName}`
+        : 'AI Landing Page';
+
       const page = await this.prisma.page.create({
         data: {
           storeId,
-          title: `AI Landing Page`,
+          title: pageTitle,
           slug,
           type: 'LANDING',
           status: 'DRAFT',
           content: normalized.data as any,
-          linkedProductId: generation.productId,
+          linkedProductId: generation.productId ?? null,
         },
       });
 
-      // Mark generation as completed with link to page
+      // ── Mark COMPLETED ───────────────────────────────────
+      const sectionCount = Array.isArray(normalized.data.sections)
+        ? (normalized.data.sections as unknown[]).length
+        : 0;
+
       await this.prisma.landingPageGeneration.update({
         where: { id: generationId },
         data: {
@@ -104,10 +161,12 @@ export class LandingPageProcessor extends WorkerHost {
         },
       });
 
-      this.logger.log(`Generation ${generationId} completed → Page ${page.id}`);
+      this.logger.log(
+        `[${generationId}] Done — ${sectionCount} sections → Page ${page.id}`,
+      );
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown error';
-      this.logger.error(`Generation ${generationId} failed: ${message}`);
+      this.logger.error(`[${generationId}] Failed: ${message}`);
 
       await this.prisma.landingPageGeneration.update({
         where: { id: generationId },
@@ -120,5 +179,25 @@ export class LandingPageProcessor extends WorkerHost {
 
       throw error; // Let BullMQ handle retries
     }
+  }
+
+  // ── Helpers ─────────────────────────────────────────────────
+  private async loadProductContext(
+    productId: string | null,
+  ): Promise<ProductContext> {
+    if (!productId) return {};
+
+    const product = await this.prisma.product.findUnique({
+      where: { id: productId },
+      select: { name: true, description: true, price: true },
+    });
+
+    if (!product) return {};
+
+    return {
+      productName: product.name,
+      productDescription: product.description ?? undefined,
+      productPrice: product.price ? Number(product.price) : undefined,
+    };
   }
 }

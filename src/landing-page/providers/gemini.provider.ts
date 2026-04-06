@@ -1,118 +1,245 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { GoogleGenerativeAI } from '@google/generative-ai';
 import {
+  GoogleGenerativeAI,
+  type GenerativeModel,
+} from '@google/generative-ai';
+import type {
   AIProvider,
-  AIGenerationInput,
-  AIGenerationOutput,
+  ProductAnalysis,
+  PagePlan,
+  ProductContext,
+  SectionGenerationContext,
 } from './ai-provider.interface';
+import {
+  buildAnalyzerSystemPrompt,
+  buildAnalyzerUserPrompt,
+  buildPlannerSystemPrompt,
+  buildPlannerUserPrompt,
+  buildSectionGeneratorSystemPrompt,
+  buildSectionGeneratorUserPrompt,
+} from '../prompts';
+
+// Sections that are always required regardless of planner output
+const MANDATORY_SECTIONS = new Set(['hero', 'features', 'offer', 'finalCta']);
+
+// Recommended fallback sections added to reach the minimum of 6
+const RECOMMENDED_FILL_SECTIONS = ['testimonials', 'problem', 'faq', 'trust'];
+
+const MIN_SECTIONS = 6;
+
+const CANONICAL_ORDER = [
+  'hero',
+  'problem',
+  'solution',
+  'features',
+  'benefits',
+  'gallery',
+  'useCases',
+  'comparison',
+  'trust',
+  'testimonials',
+  'offer',
+  'faq',
+  'finalCta',
+];
 
 @Injectable()
 export class GeminiProvider implements AIProvider {
   private readonly logger = new Logger(GeminiProvider.name);
-  private readonly model;
+  private _model: GenerativeModel | null = null;
 
-  constructor(private readonly config: ConfigService) {
-    const apiKey = this.config.getOrThrow<string>('GEMINI_API_KEY');
-    const genAI = new GoogleGenerativeAI(apiKey);
-    this.model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
+  constructor(private readonly config: ConfigService) {}
+
+  // ─── Lazy model initialization ─────────────────────────────
+  private getModel(): GenerativeModel {
+    if (!this._model) {
+      const apiKey = this.config.getOrThrow<string>('GEMINI_API_KEY');
+      const genAI = new GoogleGenerativeAI(apiKey);
+      this._model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
+    }
+    return this._model;
   }
 
-  async generate(input: AIGenerationInput): Promise<AIGenerationOutput> {
-    const systemPrompt = this.buildSystemPrompt(input);
-    const userPrompt = this.buildUserPrompt(input);
+  // ─── Step 1: Analyze ───────────────────────────────────────
+  async analyzeProduct(
+    merchantPrompt: string,
+    context: ProductContext,
+    language: string,
+    tone: string,
+  ): Promise<ProductAnalysis> {
+    this.logger.debug('Analyzer: extracting product intelligence...');
 
-    this.logger.debug(
-      `Generating landing page content (lang=${input.language}, tone=${input.tone})`,
+    const systemPrompt = buildAnalyzerSystemPrompt();
+    const userPrompt = buildAnalyzerUserPrompt({
+      merchantPrompt,
+      language,
+      tone,
+      ...context,
+    });
+
+    const raw = await this.callGemini(systemPrompt, userPrompt, 0.3);
+    const parsed = this.parseJSON(raw, 'analyzer');
+
+    return this.validateAnalysis(parsed);
+  }
+
+  // ─── Step 2: Plan ──────────────────────────────────────────
+  async planPage(
+    analysis: ProductAnalysis,
+    language: string,
+    tone: string,
+  ): Promise<PagePlan> {
+    this.logger.debug('Planner: selecting sections...');
+
+    const systemPrompt = buildPlannerSystemPrompt();
+    const userPrompt = buildPlannerUserPrompt(analysis, language, tone);
+
+    const raw = await this.callGemini(systemPrompt, userPrompt, 0.4);
+    const parsed = this.parseJSON(raw, 'planner');
+
+    return this.validatePlan(parsed);
+  }
+
+  // ─── Step 3: Generate Section ──────────────────────────────
+  async generateSection(ctx: SectionGenerationContext): Promise<unknown> {
+    this.logger.debug(`Section generator: "${ctx.sectionType}"...`);
+
+    const systemPrompt = buildSectionGeneratorSystemPrompt(
+      ctx.sectionType,
+      ctx.language,
     );
+    const userPrompt = buildSectionGeneratorUserPrompt(ctx);
 
-    const result = await this.model.generateContent({
-      contents: [
-        { role: 'user', parts: [{ text: `${systemPrompt}\n\n${userPrompt}` }] },
-      ],
+    const raw = await this.callGemini(systemPrompt, userPrompt, 0.7);
+
+    return this.parseJSON(raw, `section:${ctx.sectionType}`);
+  }
+
+  // ─── Core Gemini call ──────────────────────────────────────
+  private async callGemini(
+    systemInstruction: string,
+    userPrompt: string,
+    temperature: number,
+  ): Promise<string> {
+    const model = this.getModel();
+
+    const result = await model.generateContent({
+      systemInstruction,
+      contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
       generationConfig: {
         responseMimeType: 'application/json',
-        temperature: 0.7,
-        maxOutputTokens: 8192,
+        temperature,
+        maxOutputTokens: 4096,
       },
     });
 
-    const raw = result.response.text();
-
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(raw);
-    } catch {
-      this.logger.warn('AI returned non-JSON response, attempting extraction');
-      parsed = this.extractJSON(raw);
-    }
-
-    return { raw, parsed };
+    return result.response.text();
   }
 
-  private buildSystemPrompt(input: AIGenerationInput): string {
-    const lang = input.language === 'ar' ? 'Arabic' : 'English';
+  // ─── JSON parsing with fallback extraction ─────────────────
+  private parseJSON(raw: string, context: string): unknown {
+    const trimmed = raw.trim();
 
-    return `You are an expert landing page copywriter. Generate a complete landing page structure in ${lang} with a ${input.tone} tone.
+    // 1. Direct parse
+    try {
+      return JSON.parse(trimmed);
+    } catch {
+      /* fall through */
+    }
 
-You MUST return valid JSON with this exact structure:
-{
-  "sections": [...],
-  "metadata": { "language": "${input.language}", "tone": "${input.tone}" }
+    // 2. Strip markdown code fences
+    const fenceMatch = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/);
+    if (fenceMatch) {
+      try {
+        return JSON.parse(fenceMatch[1].trim());
+      } catch {
+        /* fall through */
+      }
+    }
+
+    // 3. Extract first JSON object
+    const objMatch = trimmed.match(/\{[\s\S]*\}/);
+    if (objMatch) {
+      try {
+        return JSON.parse(objMatch[0]);
+      } catch {
+        /* fall through */
+      }
+    }
+
+    throw new Error(`[${context}] Failed to parse AI response as JSON`);
+  }
+
+  // ─── Response validators ───────────────────────────────────
+  private validateAnalysis(parsed: unknown): ProductAnalysis {
+    if (typeof parsed !== 'object' || parsed === null) {
+      throw new Error('Analyzer returned non-object');
+    }
+    const a = parsed as Record<string, unknown>;
+
+    return {
+      targetAudience: String(a.targetAudience ?? ''),
+      primaryPainPoints: toStringArray(a.primaryPainPoints),
+      productCategory: String(a.productCategory ?? 'other'),
+      keyBenefits: toStringArray(a.keyBenefits),
+      uniqueSellingPoint: String(a.uniqueSellingPoint ?? ''),
+      emotionalTriggers: toStringArray(a.emotionalTriggers),
+    };
+  }
+
+  private validatePlan(parsed: unknown): PagePlan {
+    if (typeof parsed !== 'object' || parsed === null) {
+      throw new Error('Planner returned non-object');
+    }
+    const p = parsed as Record<string, unknown>;
+    const raw = toStringArray(p.selectedSections);
+
+    // Step 1: Keep only valid canonical sections
+    const validRaw = raw.filter((s) => CANONICAL_ORDER.includes(s));
+
+    // Step 2: Merge with mandatory sections (adds any missing mandatory)
+    const withMandatory = dedupePreserveOrder([
+      ...validRaw,
+      ...Array.from(MANDATORY_SECTIONS),
+    ]);
+
+    // Step 3: Enforce minimum 6 by filling with recommended sections
+    const filled = [...withMandatory];
+    if (filled.length < MIN_SECTIONS) {
+      for (const filler of RECOMMENDED_FILL_SECTIONS) {
+        if (filled.length >= MIN_SECTIONS) break;
+        if (!filled.includes(filler)) {
+          filled.push(filler);
+        }
+      }
+    }
+
+    // Step 4: Sort by canonical order
+    const sorted = CANONICAL_ORDER.filter((s) => filled.includes(s));
+
+    this.logger.debug(
+      `Plan validated: ${sorted.length} sections [min=${MIN_SECTIONS}]: ${sorted.join(', ')}`,
+    );
+
+    return {
+      selectedSections: sorted,
+      reasoning: typeof p.reasoning === 'string' ? p.reasoning : undefined,
+    };
+  }
 }
 
-The "sections" array must contain objects for these 13 section types (in this order):
-1. "hero" — { type: "hero", headline, subheadline, ctaText, backgroundStyle, alignment, badgeText? }
-2. "problem" — { type: "problem", headline, description?, painPoints: [{ icon?, title, description }] }
-3. "solution" — { type: "solution", headline, description, points: [{ icon?, title, description }], ctaText? }
-4. "features" — { type: "features", headline, description?, features: [{ icon?, title, description }], layout }
-5. "benefits" — { type: "benefits", headline, description?, benefits: [{ icon?, title, description }] }
-6. "gallery" — { type: "gallery", headline, description?, images: [{ src, alt, caption? }], layout }
-7. "useCases" — { type: "useCases", headline, description?, cases: [{ icon?, title, description, persona? }] }
-8. "comparison" — { type: "comparison", headline, description?, mode, items: [{ label, before, after }] }
-9. "trust" — { type: "trust", headline, stats?: [{ value, label }], badges?: [{ icon?, label }], partners? }
-10. "testimonials" — { type: "testimonials", headline, testimonials: [{ quote, authorName, authorTitle?, rating? }], layout }
-11. "offer" — { type: "offer", headline, description?, price, originalPrice?, currency, ctaText, urgencyText?, bulletPoints? }
-12. "faq" — { type: "faq", headline, description?, questions: [{ question, answer }] }
-13. "finalCta" — { type: "finalCta", headline, subheadline?, ctaText, guaranteeText? }
+// ─── Helpers ──────────────────────────────────────────────────
+function toStringArray(val: unknown): string[] {
+  if (!Array.isArray(val)) return [];
+  return val.filter((v) => typeof v === 'string');
+}
 
-Rules:
-- Return ONLY valid JSON, no markdown or explanations.
-- All text content must be in ${lang}.
-- For gallery images, use placeholder paths like "/placeholder/product-1.jpg".
-- Keep all text concise and persuasive.
-- Currency is SAR (Saudi Riyal).`;
-  }
-
-  private buildUserPrompt(input: AIGenerationInput): string {
-    let prompt = input.prompt;
-
-    if (input.productName) {
-      prompt += `\n\nProduct Name: ${input.productName}`;
-    }
-    if (input.productDescription) {
-      prompt += `\nProduct Description: ${input.productDescription}`;
-    }
-    if (input.productPrice) {
-      prompt += `\nProduct Price: ${input.productPrice} SAR`;
-    }
-
-    return prompt;
-  }
-
-  private extractJSON(text: string): unknown {
-    // Try to find JSON within markdown code blocks
-    const jsonMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/);
-    if (jsonMatch) {
-      return JSON.parse(jsonMatch[1].trim());
-    }
-
-    // Try to find raw JSON object
-    const objectMatch = text.match(/\{[\s\S]*\}/);
-    if (objectMatch) {
-      return JSON.parse(objectMatch[0]);
-    }
-
-    throw new Error('Could not extract JSON from AI response');
-  }
+function dedupePreserveOrder(arr: string[]): string[] {
+  const seen = new Set<string>();
+  return arr.filter((s) => {
+    if (seen.has(s)) return false;
+    seen.add(s);
+    return true;
+  });
 }

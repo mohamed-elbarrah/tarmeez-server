@@ -2,11 +2,7 @@ import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { Inject, Logger } from '@nestjs/common';
 import { Job } from 'bullmq';
 import { PrismaService } from '../prisma/prisma.service';
-import {
-  AI_PROVIDER,
-  type AIProvider,
-  type AIGenerationInput,
-} from './providers';
+import { AI_PROVIDER, type AIProvider, type AIGenerationInput } from './providers';
 import { LANDING_PAGE_QUEUE } from './landing-page.service';
 import { NormalizationService } from './normalization.service';
 import { GenerationStatus } from '@prisma/client';

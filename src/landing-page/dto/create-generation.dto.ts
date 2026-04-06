@@ -1,10 +1,4 @@
-import {
-  IsString,
-  IsOptional,
-  IsEnum,
-  MaxLength,
-  IsUUID,
-} from 'class-validator';
+import { IsString, IsOptional, IsEnum, MaxLength, IsUUID } from 'class-validator';
 
 export enum GenerationTone {
   PROFESSIONAL = 'professional',

@@ -60,9 +60,7 @@ export class LandingPageService {
       },
     );
 
-    this.logger.log(
-      `Generation ${generation.id} enqueued for store ${storeId}`,
-    );
+    this.logger.log(`Generation ${generation.id} enqueued for store ${storeId}`);
 
     return {
       id: generation.id,

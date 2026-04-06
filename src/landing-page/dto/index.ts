@@ -1,5 +1,1 @@
-export {
-  CreateGenerationDto,
-  GenerationTone,
-  GenerationLanguage,
-} from './create-generation.dto';
+export { CreateGenerationDto, GenerationTone, GenerationLanguage } from './create-generation.dto';

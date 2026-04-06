@@ -131,11 +131,7 @@ export class NormalizationService {
       parsed = raw as Record<string, unknown>;
     } else {
       return fail([
-        {
-          section: 'root',
-          path: '',
-          message: 'Expected object or JSON string',
-        },
+        { section: 'root', path: '', message: 'Expected object or JSON string' },
       ]);
     }
 
@@ -148,11 +144,7 @@ export class NormalizationService {
       warnings.push('AI returned array directly; wrapped as sections');
     } else {
       return fail([
-        {
-          section: 'root',
-          path: 'sections',
-          message: 'Missing sections array',
-        },
+        { section: 'root', path: 'sections', message: 'Missing sections array' },
       ]);
     }
 
@@ -226,9 +218,9 @@ export class NormalizationService {
     const data = {
       sections: deduped,
       metadata: {
-        language:
-          typeof rawMeta.language === 'string' ? rawMeta.language : 'ar',
-        tone: typeof rawMeta.tone === 'string' ? rawMeta.tone : 'professional',
+        language: typeof rawMeta.language === 'string' ? rawMeta.language : 'ar',
+        tone:
+          typeof rawMeta.tone === 'string' ? rawMeta.tone : 'professional',
         colorScheme:
           typeof rawMeta.colorScheme === 'string'
             ? rawMeta.colorScheme

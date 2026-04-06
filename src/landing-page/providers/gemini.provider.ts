@@ -22,9 +22,7 @@ export class GeminiProvider implements AIProvider {
     const systemPrompt = this.buildSystemPrompt(input);
     const userPrompt = this.buildUserPrompt(input);
 
-    this.logger.debug(
-      `Generating landing page content (lang=${input.language}, tone=${input.tone})`,
-    );
+    this.logger.debug(`Generating landing page content (lang=${input.language}, tone=${input.tone})`);
 
     const result = await this.model.generateContent({
       contents: [

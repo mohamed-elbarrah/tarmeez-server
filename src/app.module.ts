@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
+import { ConfigModule, ConfigService } from '@nestjs/config';
+import { BullModule } from '@nestjs/bullmq';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { PrismaModule } from './prisma/prisma.module';
@@ -20,10 +21,20 @@ import { CouponsModule } from './coupons/coupons.module';
 import { ThemesModule } from './themes/themes.module';
 import { MailModule } from './mail/mail.module';
 import { TeamModule } from './team/team.module';
+import { LandingPageModule } from './landing-page/landing-page.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true, envFilePath: '.env' }),
+    BullModule.forRootAsync({
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) => ({
+        connection: {
+          host: config.get('REDIS_HOST', 'localhost'),
+          port: config.get<number>('REDIS_PORT', 6379),
+        },
+      }),
+    }),
     PrismaModule,
     MailModule,
     AuthModule,
@@ -41,6 +52,7 @@ import { TeamModule } from './team/team.module';
     CouponsModule,
     ThemesModule,
     TeamModule,
+    LandingPageModule,
     ThrottlerModule.forRoot({ ttl: 60, limit: 5 }),
   ],
   controllers: [AppController],

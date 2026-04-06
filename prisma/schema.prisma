@@ -187,6 +187,7 @@ model Store {
   coupons    Coupon[]
   members    StoreMember[]
   invitations StoreInvitation[]
+  landingPageGenerations LandingPageGeneration[]
 }
 
 model Order {
@@ -566,4 +567,34 @@ model StoreInvitation {
   @@index([storeId])
   @@index([token])
   @@map("store_invitations")
+}
+
+// ─── AI Landing Page Generator ───────────────────────────────
+
+enum GenerationStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+model LandingPageGeneration {
+  id            String           @id @default(uuid())
+  storeId       String
+  store         Store            @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  productId     String?
+  status        GenerationStatus @default(PENDING)
+  prompt        String
+  language      String           @default("ar")
+  tone          String           @default("professional")
+  content       Json?            // Validated AI output (LandingPageContent)
+  errorMessage  String?
+  pageId        String?          @unique // Links to created Page when completed
+  retryCount    Int              @default(0)
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+
+  @@index([storeId])
+  @@index([status])
+  @@map("landing_page_generations")
 }

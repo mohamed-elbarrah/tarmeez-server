@@ -2,20 +2,24 @@ import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { Inject, Logger } from '@nestjs/common';
 import { Job } from 'bullmq';
 import { PrismaService } from '../prisma/prisma.service';
-import {
-  AI_PROVIDER,
-  type AIProvider,
-  type ProductContext,
-  type SectionGenerationContext,
-} from './providers';
+import { AI_PROVIDER, type AIProvider, type ProductContext } from './providers';
 import { LANDING_PAGE_QUEUE } from './landing-page.service';
 import { NormalizationService } from './normalization.service';
+import { LandingPageOrchestrator } from './landing-page.orchestrator';
 import { GenerationStatus } from '@prisma/client';
 
 interface GenerationJobData {
   generationId: string;
   storeId: string;
 }
+
+// ─── Thin processor layer ─────────────────────────────────────
+// All AI orchestration is delegated to LandingPageOrchestrator.
+// This class is responsible only for:
+//   - marking job status in the DB
+//   - loading product context
+//   - persisting the generated page
+//   - error handling + BullMQ retries
 
 @Processor(LANDING_PAGE_QUEUE)
 export class LandingPageProcessor extends WorkerHost {
@@ -25,95 +29,40 @@ export class LandingPageProcessor extends WorkerHost {
     private readonly prisma: PrismaService,
     @Inject(AI_PROVIDER) private readonly aiProvider: AIProvider,
     private readonly normalization: NormalizationService,
+    private readonly orchestrator: LandingPageOrchestrator,
   ) {
     super();
   }
 
+  /**
+   * KNOWN LIMITATION — Retry cost:
+   * In the old system, a single failed section = 1 retry call.
+   * In the new system, any failure = full 3-call retry.
+   * This is acceptable at current scale.
+   * Future improvement: add section-level checkpointing.
+   */
   async process(job: Job<GenerationJobData>): Promise<void> {
     const { generationId, storeId } = job.data;
     this.logger.log(`[${generationId}] Job received`);
 
-    // Mark as PROCESSING
     const generation = await this.prisma.landingPageGeneration.update({
       where: { id: generationId },
       data: { status: GenerationStatus.PROCESSING },
     });
 
     try {
-      // ── Load product context ─────────────────────────────
       const productContext = await this.loadProductContext(
         generation.productId,
       );
 
-      // ── Step 1: Analyze ──────────────────────────────────
-      this.logger.log(`[${generationId}] Step 1/3 — Analyzing product...`);
-      const analysis = await this.aiProvider.analyzeProduct(
+      // All AI calls handled by orchestrator (3 calls: analyze+plan, light, heavy)
+      const { normalized, metrics } = await this.orchestrator.generate(
         generation.prompt,
         productContext,
         generation.language,
         generation.tone,
+        generationId,
       );
-      this.logger.debug(
-        `[${generationId}] Analysis: category=${analysis.productCategory}, ` +
-          `audience=${analysis.targetAudience.slice(0, 60)}...`,
-      );
-
-      // ── Step 2: Plan ─────────────────────────────────────
-      this.logger.log(
-        `[${generationId}] Step 2/3 — Planning page structure...`,
-      );
-      const plan = await this.aiProvider.planPage(
-        analysis,
-        generation.language,
-        generation.tone,
-      );
-      this.logger.log(
-        `[${generationId}] Plan: ${plan.selectedSections.length} sections → ${plan.selectedSections.join(', ')}`,
-      );
-
-      // ── Step 3: Generate each section ────────────────────
-      this.logger.log(
-        `[${generationId}] Step 3/3 — Generating ${plan.selectedSections.length} sections...`,
-      );
-      const sections: unknown[] = [];
-      const sectionErrors: string[] = [];
-
-      for (const sectionType of plan.selectedSections) {
-        try {
-          const ctx: SectionGenerationContext = {
-            sectionType,
-            analysis,
-            language: generation.language,
-            tone: generation.tone,
-            ...productContext,
-          };
-          const section = await this.aiProvider.generateSection(ctx);
-          sections.push(section);
-          this.logger.debug(`[${generationId}]   ✓ ${sectionType}`);
-        } catch (sectionErr) {
-          const msg =
-            sectionErr instanceof Error
-              ? sectionErr.message
-              : String(sectionErr);
-          this.logger.warn(`[${generationId}]   ✗ ${sectionType}: ${msg}`);
-          sectionErrors.push(`${sectionType}: ${msg}`);
-          // Normalization will handle partial results gracefully
-        }
-      }
-
-      if (sections.length === 0) {
-        throw new Error(
-          `All section generations failed: ${sectionErrors.join('; ')}`,
-        );
-      }
-
-      // ── Normalize & validate ─────────────────────────────
-      const rawOutput = {
-        sections,
-        metadata: { language: generation.language, tone: generation.tone },
-      };
-
-      const normalized = this.normalization.normalize(rawOutput);
 
       if (!normalized.success || !normalized.data) {
         const errorMsg = normalized.errors
@@ -128,7 +77,6 @@ export class LandingPageProcessor extends WorkerHost {
         );
       }
 
-      // ── Create Page ──────────────────────────────────────
       const slug = `ai-landing-${generationId.slice(0, 8)}-${Date.now()}`;
       const pageTitle = productContext.productName
         ? `AI Page — ${productContext.productName}`
@@ -148,11 +96,6 @@ export class LandingPageProcessor extends WorkerHost {
         },
       });
 
-      // ── Mark COMPLETED ───────────────────────────────────
-      const sectionCount = Array.isArray(normalized.data.sections)
-        ? (normalized.data.sections as unknown[]).length
-        : 0;
-
       await this.prisma.landingPageGeneration.update({
         where: { id: generationId },
         data: {
@@ -164,7 +107,8 @@ export class LandingPageProcessor extends WorkerHost {
       });
 
       this.logger.log(
-        `[${generationId}] Done — ${sectionCount} sections → Page ${page.id}`,
+        `[${generationId}] Done — ${metrics.sectionsGenerated} sections → Page ${page.id} ` +
+          `(calls: ${metrics.totalCalls}, ${metrics.durationMs}ms)`,
       );
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown error';
@@ -183,7 +127,6 @@ export class LandingPageProcessor extends WorkerHost {
     }
   }
 
-  // ── Helpers ─────────────────────────────────────────────────
   private async loadProductContext(
     productId: string | null,
   ): Promise<ProductContext> {

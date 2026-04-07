@@ -1,13 +1,23 @@
-import type { SectionGenerationContext } from './types';
+import type {
+  PageDNA,
+  ProductContext,
+  SectionGenerationContext,
+  LightSectionsContext,
+} from './types';
 
-// ─── Step 3: Per-Section Generator Prompt ────────────────────
+// ─── Section Generator Prompt — Single & Batch ────────────────
+//
+// Single-section functions (legacy, still used by old path).
+// Batch functions (new): generate multiple sections in one call
+// using selective schema injection — only schemas for the requested
+// sections are sent, reducing token usage.
 
 /**
  * Exact JSON schema expected for each section type.
  * These are embedded verbatim in the AI prompt so the model
  * knows the exact output shape with no guessing.
  */
-const SECTION_SCHEMAS: Record<string, string> = {
+export const SECTION_SCHEMAS: Record<string, string> = {
   hero: `{
   "type": "hero",
   "headline": "string — main headline (max 120 chars, highly compelling)",
@@ -215,4 +225,215 @@ export function buildSectionGeneratorUserPrompt(
   }
 
   return lines.join('\n');
+}
+
+// ─── Batch Prompt Builders (new 3-call architecture) ─────────
+
+/**
+ * Builds the system prompt for a batch of sections.
+ * Only sends schemas for the specific sections in the batch,
+ * reducing token overhead dramatically vs sending all 13 schemas.
+ */
+export function buildBatchSectionSystemPrompt(
+  sectionTypes: string[],
+  language: string,
+  dna: PageDNA,
+): string {
+  const lang = language === 'ar' ? 'Arabic' : 'English';
+
+  // Selective schema: only include schemas for requested sections
+  const schemasBlock = sectionTypes
+    .filter((t) => SECTION_SCHEMAS[t])
+    .map((t) => `--- Section: "${t}" ---\n${SECTION_SCHEMAS[t]}`)
+    .join('\n\n');
+
+  // Section-specific rules — only include rules for sections in this batch
+  const relevantSectionRules = buildSectionSpecificRules(sectionTypes);
+
+  return `You are a world-class conversion copywriter generating landing page content.
+
+BRAND CONTEXT (apply to every word you write):
+- Copywriting angle: ${dna.copywritingAngle.replace(/_/g, ' ')}
+- Brand personality: ${dna.brandPersonality}
+- Primary hook to build upon: "${dna.primaryHook}"
+- Target audience: ${dna.targetAudience}
+- Core USP: ${dna.uniqueSellingPoint}
+
+COPYWRITING RULES (non-negotiable):
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1. Every headline must create curiosity OR promise transformation.
+   Never state features as headlines.
+   ✗ "High Quality Materials"
+   ✓ "Built to outlast every alternative you've tried"
+
+2. Body text must speak to ONE person, not a crowd.
+   ✗ "Customers love our product"
+   ✓ "If you've spent months searching for something that actually works"
+
+3. Apply the [${dna.copywritingAngle.replace(/_/g, ' ')}] framework throughout.
+   Every section must feel like it's written by the same voice.
+
+4. The primaryHook "${dna.primaryHook}" must echo in at least
+   one element of each section (not copy-paste, but the same idea).
+
+5. FORBIDDEN phrases (will cause rejection):
+   - "high quality" / "جودة عالية"
+   - "best in class" / "الأفضل في فئته"
+   - "revolutionary" / "ثوري"
+   - "innovative solution" / "حل مبتكر"
+   - "seamlessly" / "بسلاسة"
+   - Any generic superlative without specific proof
+
+6. Numbers and specifics beat adjectives always.
+   ✗ "saves you a lot of time"
+   ✓ "saves 2 hours every morning"
+
+Write in ${lang}. Make copy specific, emotionally resonant, and conversion-focused.
+${relevantSectionRules}
+YOUR TASK:
+Generate content for ${sectionTypes.length} landing page section(s): ${sectionTypes.map((t) => `"${t}"`).join(', ')}.
+
+Return a JSON object with a "sections" array containing ONE object per section, in this order: ${sectionTypes.map((t) => `"${t}"`).join(', ')}.
+
+Response format:
+{
+  "sections": [
+    <section object 1>,
+    <section object 2>,
+    ...
+  ]
+}
+
+Exact schema for each section (comments are explanatory, not JSON):
+${schemasBlock}
+
+STRICT RULES:
+- Return ONLY the JSON object — no markdown, no code blocks, no explanation.
+- "sections" array must contain exactly ${sectionTypes.length} object(s).
+- Each section object must include its "type" field matching the schema.
+- Icons: use relevant emoji (e.g. "✅", "🚀") or omit the field.
+- Never use placeholder text like "Lorem ipsum".`;
+}
+
+/**
+ * Builds the user prompt for a batch of sections.
+ * For heavy sections, receives a lightweight LightSectionsContext
+ * for thematic consistency (~100 tokens max, not full content).
+ */
+export function buildBatchSectionUserPrompt(
+  sectionTypes: string[],
+  dna: PageDNA,
+  productContext: ProductContext,
+  language: string,
+  tone: string,
+  lightSectionsContext?: LightSectionsContext,
+): string {
+  const lines: string[] = [
+    `Generate ${sectionTypes.length} section(s): ${sectionTypes.map((t) => `"${t}"`).join(', ')}`,
+    '',
+    `=== PAGE DNA ===`,
+    `Pain Points: ${dna.primaryPainPoints.join(' | ')}`,
+    `Key Benefits: ${dna.keyBenefits.join(' | ')}`,
+    `Emotional Triggers: ${dna.emotionalTriggers.join(', ')}`,
+    `Tone: ${tone}`,
+    `Language: ${language === 'ar' ? 'Arabic' : 'English'}`,
+  ];
+
+  if (productContext.productName) {
+    lines.push(`Product: ${productContext.productName}`);
+  }
+  if (productContext.productDescription) {
+    lines.push(`Description: ${productContext.productDescription}`);
+  }
+  if (productContext.productPrice) {
+    lines.push(`Price: ${productContext.productPrice} SAR`);
+  }
+
+  if (lightSectionsContext) {
+    lines.push('');
+    lines.push(
+      '=== CONSISTENCY CONTEXT (light sections already generated) ===',
+    );
+    lines.push(
+      `Generated section types: ${lightSectionsContext.generatedTypes.join(', ')}`,
+    );
+    lines.push(
+      `Central theme established: "${lightSectionsContext.mainTheme}"`,
+    );
+    lines.push(
+      `Voice/tone established: ${lightSectionsContext.toneEstablished}`,
+    );
+    if (lightSectionsContext.keyBenefitsMentioned.length > 0) {
+      lines.push(
+        `Benefits already mentioned: ${lightSectionsContext.keyBenefitsMentioned.join(', ')}`,
+      );
+      lines.push(
+        `(avoid repeating these — introduce complementary benefits instead)`,
+      );
+    }
+  }
+
+  lines.push('');
+  lines.push(
+    'Return the JSON object with the "sections" array now. Make every word earn its place.',
+  );
+
+  return lines.join('\n');
+}
+
+// ─── Section-Specific Rules Builder ──────────────────────────
+
+/**
+ * Returns targeted copywriting rules only for the sections present
+ * in the current batch. Injected into the system prompt to avoid
+ * sending irrelevant rules for sections not being generated.
+ */
+function buildSectionSpecificRules(sectionTypes: string[]): string {
+  const requested = new Set(sectionTypes);
+  const rules: string[] = [];
+
+  if (requested.has('hero')) {
+    rules.push(`hero:
+  - headline = use hookVariants[0] or improve upon it
+  - subheadline explains the transformation in ONE sentence
+  - avoid naming the product in the headline if possible`);
+  }
+
+  if (requested.has('features')) {
+    rules.push(`features:
+  - each feature title starts with an action verb (protects, saves, ensures)
+  - maximum 6 features — quality over quantity
+  - order them: strongest first`);
+  }
+
+  if (requested.has('testimonials')) {
+    rules.push(`testimonials:
+  - each quote tells a micro-story: problem → product → result
+  - avoid generic praise ("great product!")
+  - add ONE realistic specific detail per testimonial`);
+  }
+
+  if (requested.has('faq')) {
+    rules.push(`faq:
+  - questions must reflect genuine doubts, not marketing questions
+  ✗ "What are the product's advantages?"
+  ✓ "Does this work if I'm a complete beginner?"`);
+  }
+
+  if (requested.has('finalCta') || requested.has('offer')) {
+    rules.push(`cta / offer:
+  - CTA text describes what happens NEXT, not what to do
+  ✗ "Buy Now"
+  ✓ "Start Your Experience Today"
+  - the section must complete the primaryHook narrative, not restart it`);
+  }
+
+  if (rules.length === 0) return '';
+
+  return `
+SECTION-SPECIFIC RULES:
+━━━━━━━━━━━━━━━━━━━━━━━
+${rules.join('\n\n')}
+
+`;
 }

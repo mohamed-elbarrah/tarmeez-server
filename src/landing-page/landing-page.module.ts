@@ -5,6 +5,7 @@ import { MerchantModule } from '../merchant/merchant.module';
 import { LandingPageController } from './landing-page.controller';
 import { LandingPageService, LANDING_PAGE_QUEUE } from './landing-page.service';
 import { LandingPageProcessor } from './landing-page.processor';
+import { LandingPageOrchestrator } from './landing-page.orchestrator';
 import { NormalizationService } from './normalization.service';
 import { AI_PROVIDER } from './providers/ai-provider.interface';
 import { GeminiProvider } from './providers/gemini.provider';
@@ -21,6 +22,7 @@ import { GeminiProvider } from './providers/gemini.provider';
   providers: [
     LandingPageService,
     LandingPageProcessor,
+    LandingPageOrchestrator,
     NormalizationService,
     {
       provide: AI_PROVIDER,

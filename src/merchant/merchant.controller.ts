@@ -46,6 +46,7 @@ export class MerchantController {
     private svc: MerchantService,
     private registry: PaymentRegistry,
     private ordersSvc: OrdersService,
+    private uploadService: UploadService,
   ) {}
 
   @Get('customers')
@@ -113,11 +114,18 @@ export class MerchantController {
   @UseInterceptors(FileInterceptor('file', UploadService.getMulterOptions()))
   async uploadStoreImage(
     @CurrentUser() user: JwtUser,
+    @Req() req: Request,
     @UploadedFile() file: Express.Multer.File,
   ) {
     if (!file) throw new BadRequestException('No file uploaded');
-    const relativePath = UploadService.getRelativePath(file.filename);
-    return { url: relativePath };
+    
+    // Store assets under stores/{storeId}/images/
+    const storeId = req.activeStore?.id;
+    if (!storeId) throw new BadRequestException('Active store not found');
+    const keyPath = `stores/${storeId}/images`;
+
+    const url = await this.uploadService.uploadFile(file, keyPath);
+    return { url };
   }
 
 

@@ -1,37 +1,40 @@
-import { Injectable, BadRequestException } from '@nestjs/common';
-import { diskStorage } from 'multer';
+import { Injectable, BadRequestException, InternalServerErrorException } from '@nestjs/common';
+import { memoryStorage } from 'multer';
 import { extname } from 'path';
-import * as fs from 'fs';
+import { ConfigService } from '@nestjs/config';
+import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 
 @Injectable()
 export class UploadService {
-  private static readonly UPLOAD_DIR = 'uploads/stores';
+  private s3Client: S3Client;
+  private bucketName: string;
+  private publicUrl: string;
 
-  constructor() {
-    this.ensureDirExists();
-  }
+  constructor(private configService: ConfigService) {
+    const accountId = this.configService.get('R2_ACCOUNT_ID');
+    const accessKeyId = this.configService.get('R2_ACCESS_KEY_ID');
+    const secretAccessKey = this.configService.get('R2_SECRET_ACCESS_KEY');
+    
+    this.bucketName = this.configService.get('R2_BUCKET_NAME') || '';
+    this.publicUrl = this.configService.get('R2_PUBLIC_URL') || '';
 
-  private ensureDirExists() {
-    if (!fs.existsSync(UploadService.UPLOAD_DIR)) {
-      fs.mkdirSync(UploadService.UPLOAD_DIR, { recursive: true });
+    if (!accountId || !accessKeyId || !secretAccessKey) {
+      console.warn('R2 credentials not fully configured. Uploads may fail.');
     }
+
+    this.s3Client = new S3Client({
+      region: 'auto',
+      endpoint: `https://${accountId}.r2.cloudflarestorage.com`,
+      credentials: {
+        accessKeyId: accessKeyId || '',
+        secretAccessKey: secretAccessKey || '',
+      },
+    });
   }
 
   static getMulterOptions() {
     return {
-      storage: diskStorage({
-        destination: (req, file, cb) => {
-          if (!fs.existsSync(this.UPLOAD_DIR)) {
-            fs.mkdirSync(this.UPLOAD_DIR, { recursive: true });
-          }
-          cb(null, this.UPLOAD_DIR);
-        },
-        filename: (req, file, cb) => {
-          const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
-          const ext = extname(file.originalname).toLowerCase();
-          cb(null, `store-asset-${uniqueSuffix}${ext}`);
-        },
-      }),
+      storage: memoryStorage(),
       fileFilter: (req, file, cb) => {
         const allowed = ['.jpg', '.jpeg', '.png', '.svg', '.ico', '.webp'];
         const ext = extname(file.originalname).toLowerCase();
@@ -40,11 +43,33 @@ export class UploadService {
         }
         cb(null, true as any);
       },
-      limits: { fileSize: 2 * 1024 * 1024 }, // 2MB
+      limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
     };
   }
 
-  static getRelativePath(filename: string): string {
-    return `/uploads/stores/${filename}`;
+  async uploadFile(file: Express.Multer.File, keyPath: string): Promise<string> {
+    try {
+      const ext = extname(file.originalname).toLowerCase();
+      const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+      const filename = `${uniqueSuffix}${ext}`;
+      
+      const fullPath = `${keyPath}/${filename}`.replace(/^\/+/, ''); // Remove leading slash if any
+
+      const command = new PutObjectCommand({
+        Bucket: this.bucketName,
+        Key: fullPath,
+        Body: file.buffer,
+        ContentType: file.mimetype,
+      });
+
+      await this.s3Client.send(command);
+
+      // Return the public URL
+      const normalizedPublicUrl = this.publicUrl.endsWith('/') ? this.publicUrl.slice(0, -1) : this.publicUrl;
+      return `${normalizedPublicUrl}/${fullPath}`;
+    } catch (error) {
+      console.error('Error uploading file to R2:', error);
+      throw new InternalServerErrorException('Failed to upload file');
+    }
   }
 }

@@ -65,7 +65,12 @@ export class GeminiProvider implements AIProvider {
     if (!this._model) {
       const apiKey = this.config.getOrThrow<string>('GEMINI_API_KEY');
       const genAI = new GoogleGenerativeAI(apiKey);
-      this._model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
+      this._model = genAI.getGenerativeModel({
+        model: this.config.get<string>(
+          'GEMINI_PRIMARY_MODEL',
+          'gemini-2.5-flash',
+        ),
+      });
     }
     return this._model;
   }
@@ -253,7 +258,7 @@ export class GeminiProvider implements AIProvider {
       '\n\nRespond ONLY with raw JSON. No markdown, no code blocks, no explanations.';
 
     return this.callWithRetry(
-      process.env.GEMINI_MODEL ?? 'gemini-2.5-flash',
+      this.config.get<string>('GEMINI_PRIMARY_MODEL', 'gemini-2.5-flash'),
       () => ({
         contents: [{ role: 'user', parts: [{ text: combinedPrompt }] }],
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -275,8 +280,10 @@ export class GeminiProvider implements AIProvider {
    * model, it walks a fallback chain one-shot per model until one succeeds.
    *
    * Fallback chain (April 2026):
-   *   1. gemini-1.5-flash-latest  — stable backup
-   *   2. gemini-3.1-flash-lite-preview — high-availability preview
+   *   1. gemini-3.1-flash-lite-preview — high-availability preview
+   *   2. gemini-2.0-flash-lite         — lighter stable backup
+   *
+   * NOTE: gemini-2.0-flash is 404 (unavailable to new users) — do NOT add it.
    *
    * thinkingBudget: 0 is enforced on every model to preserve Arabic
    * content integrity (thinking tokens eat into the output budget).
@@ -292,8 +299,14 @@ export class GeminiProvider implements AIProvider {
   ): Promise<string> {
     const BACKOFFS_MS = [2_000, 4_000, 8_000]; // 3 retries on primary
     const FALLBACK_CHAIN = [
-      'gemini-2.0-flash', // stable fallback (1.5-flash-latest was removed)
-      'gemini-3.1-flash-lite-preview', // high-availability preview
+      this.config.get<string>(
+        'GEMINI_FALLBACK_MODEL_1',
+        'gemini-3.1-flash-lite-preview',
+      ),
+      this.config.get<string>(
+        'GEMINI_FALLBACK_MODEL_2',
+        'gemini-2.0-flash-lite',
+      ),
     ];
 
     const apiKey = this.config.getOrThrow<string>('GEMINI_API_KEY');
@@ -381,7 +394,7 @@ export class GeminiProvider implements AIProvider {
     // 2-second delay to stay within free-tier per-minute rate limits
     await new Promise((resolve) => setTimeout(resolve, 2000));
     this.logger.log(
-      `DEBUG: Calling Gemini API (model: gemini-2.5-flash, temp: ${temperature}, maxTokens: ${maxOutputTokens})`,
+      `DEBUG: Calling Gemini API (model: ${this.config.get('GEMINI_PRIMARY_MODEL', 'gemini-2.5-flash')}, temp: ${temperature}, maxTokens: ${maxOutputTokens})`,
     );
 
     const combinedPrompt =
@@ -391,7 +404,7 @@ export class GeminiProvider implements AIProvider {
       '\n\nRespond ONLY with a raw JSON object. No markdown, no code blocks.';
 
     return this.callWithRetry(
-      process.env.GEMINI_MODEL ?? 'gemini-2.5-flash',
+      this.config.get<string>('GEMINI_PRIMARY_MODEL', 'gemini-2.5-flash'),
       () => ({
         contents: [{ role: 'user', parts: [{ text: combinedPrompt }] }],
         // eslint-disable-next-line @typescript-eslint/no-explicit-any

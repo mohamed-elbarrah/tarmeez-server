@@ -328,6 +328,8 @@ model Page {
   type            PageType
   status          PageStatus  @default(DRAFT)
   content         Json        @default("{}")
+  chatHistory     Json?       // Persistent AI conversation: [{role, content}]
+  metadata        Json?       // AI page metadata: {prompt, language, tone, generationId}
   showHeader      Boolean     @default(false)
   showFooter      Boolean     @default(false)
   linkedProductId String?

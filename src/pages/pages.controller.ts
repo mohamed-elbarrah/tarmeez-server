@@ -44,7 +44,7 @@ export class PagesController {
   @Get(':id')
   @Permissions(Resource.PAGES, Action.READ)
   async getPage(@Req() req, @Param('id') id: string) {
-    return this.pagesService.getPage(id, req.user.id);
+    return this.pagesService.getPage(id, req.activeStore.id);
   }
 
   @Patch(':id')

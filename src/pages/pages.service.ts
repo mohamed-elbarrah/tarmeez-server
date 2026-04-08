@@ -1,7 +1,6 @@
 import {
   Injectable,
   NotFoundException,
-  ForbiddenException,
   BadRequestException,
   ConflictException,
 } from '@nestjs/common';
@@ -82,22 +81,23 @@ export class PagesService {
     });
   }
 
-  async getPage(pageId: string, userId: string) {
-    const storeId = await this.getStoreIdByMerchant(userId);
-    const page = await this.prisma.page.findUnique({
-      where: { id: pageId },
+  /**
+   * Fetch a page by ID, verifying it belongs to the given store.
+   * Accepts storeId directly — no merchant table lookup needed.
+   */
+  async getPage(pageId: string, storeId: string) {
+    const page = await this.prisma.page.findFirst({
+      where: { id: pageId, storeId },
     });
 
     if (!page) throw new NotFoundException('Page not found');
-    if (page.storeId !== storeId)
-      throw new ForbiddenException('You do not own this page');
 
     return page;
   }
 
   async updatePage(pageId: string, dto: UpdatePageDto, userId: string) {
     const storeId = await this.getStoreIdByMerchant(userId);
-    const page = await this.getPage(pageId, userId);
+    const page = await this.getPage(pageId, storeId);
 
     const slug = dto.slug ? sanitizeSlug(dto.slug) : page.slug;
 
@@ -145,7 +145,8 @@ export class PagesService {
     dto: UpdatePageStatusDto,
     userId: string,
   ) {
-    const page = await this.getPage(pageId, userId);
+    const storeId = await this.getStoreIdByMerchant(userId);
+    const page = await this.getPage(pageId, storeId);
 
     const currentStatus = page.status;
     const newStatus = dto.status;
@@ -170,7 +171,8 @@ export class PagesService {
   }
 
   async deletePage(pageId: string, userId: string) {
-    const page = await this.getPage(pageId, userId);
+    const storeId = await this.getStoreIdByMerchant(userId);
+    const page = await this.getPage(pageId, storeId);
 
     if (page.status === PageStatus.PUBLISHED) {
       throw new BadRequestException('لا يمكن حذف صفحة منشورة');
@@ -273,7 +275,7 @@ export class PagesService {
         OR: [{ slug: storeSlugOrId }, { id: storeSlugOrId }],
       },
     });
-    
+
     if (!store) {
       throw new NotFoundException('Store not found');
     }

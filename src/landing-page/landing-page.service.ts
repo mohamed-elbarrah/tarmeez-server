@@ -11,7 +11,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CreateGenerationDto } from './dto';
 import { RefinePageDto } from './dto/refine-page.dto';
 import { LandingPageRefiner, type RefineResult } from './landing-page.refiner';
-import { GenerationStatus } from '@prisma/client';
+import { GenerationStatus, Prisma } from '@prisma/client';
 
 export const LANDING_PAGE_QUEUE = 'landing-page-generation';
 
@@ -157,17 +157,73 @@ export class LandingPageService {
     // 2. Delegate to refiner (synchronous AI call — user is waiting)
     const result = await this.refiner.refine(dto, pageId, storeId);
 
-    // 3. If success, persist updated content to DB
+    // 3. If success, persist updated content + updated chatHistory to DB
     if (result.success) {
+      // Build new chatHistory: existing + user instruction + assistant reply
+      const existing: Array<{ role: string; content: string }> = Array.isArray(
+        page.chatHistory,
+      )
+        ? (page.chatHistory as any)
+        : [];
+
+      const updatedHistory = [
+        ...existing,
+        { role: 'user', content: dto.instruction },
+        { role: 'assistant', content: result.assistantMessage },
+      ];
+
       await this.prisma.page.update({
         where: { id: pageId },
         data: {
           content: result.updatedContent as any,
+          chatHistory: updatedHistory as any,
           updatedAt: new Date(),
         },
       });
     }
 
     return result;
+  }
+
+  async getChatHistory(
+    pageId: string,
+    storeId: string,
+  ): Promise<{ chatHistory: Array<{ role: string; content: string }> }> {
+    const page = await this.prisma.page.findFirst({
+      where: { id: pageId, storeId },
+      select: { chatHistory: true },
+    });
+
+    if (!page) throw new NotFoundException('Page not found');
+
+    const chatHistory = Array.isArray(page.chatHistory)
+      ? (page.chatHistory as any)
+      : [];
+
+    return { chatHistory };
+  }
+
+  async listAIPages(storeId: string) {
+    const pages = await this.prisma.page.findMany({
+      where: {
+        storeId,
+        type: 'LANDING',
+        metadata: { not: Prisma.JsonNull },
+      },
+      orderBy: { updatedAt: 'desc' },
+      take: 50,
+      select: {
+        id: true,
+        title: true,
+        slug: true,
+        status: true,
+        createdAt: true,
+        updatedAt: true,
+        metadata: true,
+        linkedProductId: true,
+      },
+    });
+
+    return pages;
   }
 }

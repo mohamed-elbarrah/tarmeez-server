@@ -46,4 +46,14 @@ export class LandingPageController {
   ): Promise<RefineResult> {
     return this.landingPageService.refine(pageId, req.activeStore.id, dto);
   }
+
+  @Get('ai-pages')
+  async listAIPages(@Req() req) {
+    return this.landingPageService.listAIPages(req.activeStore.id);
+  }
+
+  @Get(':pageId/chat')
+  async getChatHistory(@Req() req, @Param('pageId') pageId: string) {
+    return this.landingPageService.getChatHistory(pageId, req.activeStore.id);
+  }
 }

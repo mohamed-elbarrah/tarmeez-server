@@ -10,31 +10,84 @@ interface ConversationMessage {
 function buildConversationBlock(history?: ConversationMessage[]): string {
   if (!history || history.length === 0) return '';
   const lines = history
-    .slice(-6) // cap at last 6 messages
+    .slice(-8) // last 8 messages for full context
     .map((m) => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content}`)
     .join('\n');
-  return `\nConversation history:\n${lines}`;
+  return `\n\nConversation history (for context):\n${lines}`;
 }
 
-// ─── Builder 1: Full page refine ─────────────────────────────
+// ─── Delta type (shared with refiner) ────────────────────────
 
-export function buildFullRefinePrompt(params: {
+export interface SectionPatch {
+  sectionType: string;
+  content: Record<string, any>;
+}
+
+export interface RefineDelta {
+  type: 'FULL' | 'PARTIAL';
+  message: string;
+  patches: SectionPatch[] | null;
+  fullContent: Record<string, any> | null;
+}
+
+// ─── Builder 1: Surgical full-page refine ────────────────────
+// Single call — AI decides FULL vs PARTIAL and returns a delta.
+
+export function buildSurgicalRefinePrompt(params: {
   instruction: string;
   currentContent: Record<string, any>;
   conversationHistory?: ConversationMessage[];
 }): { systemPrompt: string; userPrompt: string } {
+  // Build a compact section map so AI understands page structure at a glance
+  const sections: any[] = Array.isArray(params.currentContent.sections)
+    ? params.currentContent.sections
+    : [];
+  const sectionMap =
+    sections.length > 0
+      ? sections
+          .map(
+            (s: any, i: number) =>
+              `  [${i}] type="${s?.type ?? 'unknown'}" — headline: "${s?.headline ?? s?.title ?? s?.heading ?? '...'}"`,
+          )
+          .join('\n')
+      : '  (flat object — no sections array)';
+
   const systemPrompt = `You are a conversion copywriter and landing page strategist.
-You will receive a full landing page JSON and an instruction.
-Apply the instruction to the entire page while maintaining brand voice consistency across all sections.
-Respond ONLY with the complete updated page JSON.
-Keep all section types and structure intact.
-Only change content, never add or remove sections.`;
+You receive a landing page JSON and a merchant instruction.
+
+STEP 1 — DECIDE SCOPE:
+- PARTIAL: instruction targets ≤ 3 specific sections (e.g. "change the hero headline",
+  "update button color", "rewrite the features list", "fix the CTA text").
+- FULL: instruction requires changes across 4+ sections (e.g. "change the entire tone",
+  "translate everything to English", "rewrite for a different audience", "make it shorter").
+
+STEP 2 — RESPOND with EXACTLY this JSON schema. Nothing else. No explanation outside JSON:
+
+{
+  "type": "PARTIAL" | "FULL",
+  "message": "<short Arabic summary of what you changed>",
+  "patches": [
+    { "sectionType": "<exact section type string>", "content": { <complete updated section object> } }
+  ] | null,
+  "fullContent": { <complete updated page JSON> } | null
+}
+
+RULES:
+- type=PARTIAL → patches must be a non-empty array, fullContent must be null.
+- type=FULL    → fullContent must be the complete page JSON, patches must be null.
+- In patches: include ONLY the sections that actually changed. Include ALL fields of each updated section (not just the changed field).
+- Never add or remove sections. Never change section types or field names. Only change values.
+- Keep the language and tone consistent with the existing content.
+- Respond ONLY with the JSON object. No markdown fences, no explanation.`;
 
   const conversationBlock = buildConversationBlock(params.conversationHistory);
 
   const userPrompt = `Instruction: ${params.instruction}
 
-Current page content:
+Page sections:
+${sectionMap}
+
+Full page content:
 ${JSON.stringify(params.currentContent, null, 2)}${conversationBlock}`;
 
   return { systemPrompt, userPrompt };
@@ -91,4 +144,14 @@ Instruction: ${params.instruction}
 Current value: ${currentValueStr}${conversationBlock}`;
 
   return { systemPrompt, userPrompt };
+}
+
+// ─── Legacy alias (kept for any external callers) ─────────────
+/** @deprecated Use buildSurgicalRefinePrompt instead */
+export function buildFullRefinePrompt(params: {
+  instruction: string;
+  currentContent: Record<string, any>;
+  conversationHistory?: ConversationMessage[];
+}): { systemPrompt: string; userPrompt: string } {
+  return buildSurgicalRefinePrompt(params);
 }

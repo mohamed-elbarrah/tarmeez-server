@@ -91,6 +91,23 @@ export class LandingPageProcessor extends WorkerHost {
           status: 'PUBLISHED',
           content: normalized.data as any,
           linkedProductId: generation.productId ?? null,
+          chatHistory: [
+            {
+              role: 'user',
+              content: generation.prompt,
+            },
+            {
+              role: 'assistant',
+              content:
+                '✅ تم! صفحة الهبوط جاهزة. يمكنك الآن تعديل أي شيء بالكتابة هنا.',
+            },
+          ] as any,
+          metadata: {
+            generationId,
+            prompt: generation.prompt,
+            language: generation.language,
+            tone: generation.tone,
+          } as any,
           createdAt: new Date(),
           updatedAt: new Date(),
         },

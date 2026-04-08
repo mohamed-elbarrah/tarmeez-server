@@ -14,6 +14,7 @@ import type {
   PageDNA,
   SectionPlan,
   LightSectionsContext,
+  RefineScope,
 } from './ai-provider.interface';
 import {
   buildAnalyzerSystemPrompt,
@@ -142,8 +143,8 @@ export class GeminiProvider implements AIProvider {
     });
 
     // temperature=0.4: creative enough for hook, stable enough for planning
-    // maxOutputTokens=2500: Arabic JSON is token-heavy; 1200 truncated responses
-    const raw = await this.callGemini(systemPrompt, userPrompt, 0.4, 2500);
+    // maxOutputTokens=4096: Arabic JSON is token-heavy; raised from 2500 to prevent truncation
+    const raw = await this.callGemini(systemPrompt, userPrompt, 0.4, 4096);
     const parsed = this.parseJSON(raw, 'analysis-plan');
 
     return this.validateAnalysisAndPlan(parsed);
@@ -224,6 +225,152 @@ export class GeminiProvider implements AIProvider {
     return this.extractSectionsFromBatch(parsed, sectionTypes, 'heavy-batch');
   }
 
+  // ─── Refine: Apply instruction to full page, section, or field ─
+  async generateRefinement(
+    systemPrompt: string,
+    userPrompt: string,
+    scope: RefineScope,
+  ): Promise<string> {
+    const tokenLimits: Record<
+      RefineScope,
+      { maxOutputTokens: number; temperature: number }
+    > = {
+      full: { maxOutputTokens: 4000, temperature: 0.6 },
+      section: { maxOutputTokens: 1500, temperature: 0.7 },
+      field: { maxOutputTokens: 300, temperature: 0.8 },
+    };
+
+    const { maxOutputTokens, temperature } = tokenLimits[scope];
+
+    this.logger.debug(
+      `generateRefinement: scope=${scope}, temp=${temperature}, maxTokens=${maxOutputTokens}`,
+    );
+
+    const combinedPrompt =
+      systemPrompt +
+      '\n\n' +
+      userPrompt +
+      '\n\nRespond ONLY with raw JSON. No markdown, no code blocks, no explanations.';
+
+    return this.callWithRetry(
+      process.env.GEMINI_MODEL ?? 'gemini-2.5-flash',
+      () => ({
+        contents: [{ role: 'user', parts: [{ text: combinedPrompt }] }],
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        generationConfig: {
+          temperature,
+          maxOutputTokens,
+          responseMimeType: 'application/json', // Force valid JSON — prevents parse failures
+          thinkingConfig: { thinkingBudget: 0 },
+        } as any,
+      }),
+      `generateRefinement(scope=${scope})`,
+    );
+  }
+
+  // ─── Retry helper — exponential backoff on 503 + fallback chain ───
+  /**
+   * Wraps a Gemini API call with up to 3 retries (2s → 4s → 8s backoff)
+   * on transient 503 errors. After retries are exhausted on the primary
+   * model, it walks a fallback chain one-shot per model until one succeeds.
+   *
+   * Fallback chain (April 2026):
+   *   1. gemini-1.5-flash-latest  — stable backup
+   *   2. gemini-3.1-flash-lite-preview — high-availability preview
+   *
+   * thinkingBudget: 0 is enforced on every model to preserve Arabic
+   * content integrity (thinking tokens eat into the output budget).
+   */
+  private async callWithRetry(
+    primaryModelName: string,
+    buildContents: (
+      model: import('@google/generative-ai').GenerativeModel,
+    ) => Parameters<
+      import('@google/generative-ai').GenerativeModel['generateContent']
+    >[0],
+    label: string,
+  ): Promise<string> {
+    const BACKOFFS_MS = [2_000, 4_000, 8_000]; // 3 retries on primary
+    const FALLBACK_CHAIN = [
+      'gemini-2.0-flash', // stable fallback (1.5-flash-latest was removed)
+      'gemini-3.1-flash-lite-preview', // high-availability preview
+    ];
+
+    const apiKey = this.config.getOrThrow<string>('GEMINI_API_KEY');
+    const genAI = new GoogleGenerativeAI(apiKey);
+
+    const isTransient = (err: unknown): boolean => {
+      if (!err) return false;
+      const msg = String((err as Error).message ?? '');
+      // 404 = model not found (permanent) — never retry, skip straight to fallback chain
+      // 429 = rate limit (transient) — retry with backoff
+      return (
+        msg.includes('503') ||
+        msg.includes('429') ||
+        msg.toLowerCase().includes('service unavailable') ||
+        msg.toLowerCase().includes('try again') ||
+        msg.toLowerCase().includes('overloaded')
+      );
+    };
+
+    // --- Primary model with retries ---
+    let lastError: unknown;
+    this.logger.debug(
+      `[GeminiProvider] Attempting "${primaryModelName}" for ${label}`,
+    );
+    for (let attempt = 0; attempt <= BACKOFFS_MS.length; attempt++) {
+      try {
+        const model = genAI.getGenerativeModel({ model: primaryModelName });
+        const result = await model.generateContent(buildContents(model));
+        return result.response.text();
+      } catch (err) {
+        if (!isTransient(err)) throw err; // non-transient: propagate immediately
+
+        lastError = err;
+        if (attempt < BACKOFFS_MS.length) {
+          const delay = BACKOFFS_MS[attempt];
+          this.logger.warn(
+            `[GeminiProvider] "${primaryModelName}" transient error on ${label} (attempt ${attempt + 1}/${BACKOFFS_MS.length}), retrying in ${delay / 1000}s...`,
+          );
+          await new Promise((r) => setTimeout(r, delay));
+        }
+      }
+    }
+
+    // --- Fallback chain (one shot per model) ---
+    this.logger.warn(
+      `[GeminiProvider] All retries exhausted for "${primaryModelName}" on ${label}. Starting fallback chain...`,
+    );
+    for (const fallbackName of FALLBACK_CHAIN) {
+      this.logger.warn(
+        `[GeminiProvider] Trying fallback model "${fallbackName}" for ${label}...`,
+      );
+      try {
+        const fallbackModel = genAI.getGenerativeModel({ model: fallbackName });
+        const result = await fallbackModel.generateContent(
+          buildContents(fallbackModel),
+        );
+        this.logger.log(
+          `[GeminiProvider] Fallback "${fallbackName}" succeeded for ${label}`,
+        );
+        return result.response.text();
+      } catch (fallbackErr) {
+        const msg = String((fallbackErr as Error).message ?? '');
+        this.logger.error(
+          `[GeminiProvider] Fallback "${fallbackName}" failed for ${label}: ${msg}`,
+        );
+        lastError = fallbackErr;
+        // Continue to next fallback
+      }
+    }
+
+    // All models exhausted — surface the last error
+    this.logger.error(
+      `[GeminiProvider] All models in fallback chain failed for ${label}. Giving up.`,
+    );
+    throw lastError;
+  }
+
   // ─── Core Gemini call ──────────────────────────────────────
   private async callGemini(
     systemInstruction: string,
@@ -236,7 +383,6 @@ export class GeminiProvider implements AIProvider {
     this.logger.log(
       `DEBUG: Calling Gemini API (model: gemini-2.5-flash, temp: ${temperature}, maxTokens: ${maxOutputTokens})`,
     );
-    const model = this.getModel();
 
     const combinedPrompt =
       systemInstruction +
@@ -244,19 +390,20 @@ export class GeminiProvider implements AIProvider {
       userPrompt +
       '\n\nRespond ONLY with a raw JSON object. No markdown, no code blocks.';
 
-    const result = await model.generateContent({
-      contents: [{ role: 'user', parts: [{ text: combinedPrompt }] }],
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      generationConfig: {
-        temperature,
-        maxOutputTokens,
-        // Disable thinking — thinking tokens consume the output budget,
-        // leaving too few tokens for actual JSON content (Arabic text is token-heavy)
-        thinkingConfig: { thinkingBudget: 0 },
-      } as any,
-    });
-
-    return result.response.text();
+    return this.callWithRetry(
+      process.env.GEMINI_MODEL ?? 'gemini-2.5-flash',
+      () => ({
+        contents: [{ role: 'user', parts: [{ text: combinedPrompt }] }],
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        generationConfig: {
+          temperature,
+          maxOutputTokens,
+          responseMimeType: 'application/json', // Force valid JSON — prevents parse failures
+          thinkingConfig: { thinkingBudget: 0 },
+        } as any,
+      }),
+      `callGemini(temp=${temperature}, maxTokens=${maxOutputTokens})`,
+    );
   }
 
   // ─── JSON parsing with fallback extraction ─────────────────

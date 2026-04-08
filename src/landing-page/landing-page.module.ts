@@ -6,6 +6,7 @@ import { LandingPageController } from './landing-page.controller';
 import { LandingPageService, LANDING_PAGE_QUEUE } from './landing-page.service';
 import { LandingPageProcessor } from './landing-page.processor';
 import { LandingPageOrchestrator } from './landing-page.orchestrator';
+import { LandingPageRefiner } from './landing-page.refiner';
 import { NormalizationService } from './normalization.service';
 import { AI_PROVIDER } from './providers/ai-provider.interface';
 import { GeminiProvider } from './providers/gemini.provider';
@@ -23,6 +24,7 @@ import { GeminiProvider } from './providers/gemini.provider';
     LandingPageService,
     LandingPageProcessor,
     LandingPageOrchestrator,
+    LandingPageRefiner,
     NormalizationService,
     {
       provide: AI_PROVIDER,

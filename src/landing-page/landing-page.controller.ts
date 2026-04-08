@@ -10,6 +10,8 @@ import {
 import { MerchantGuard } from '../merchant/guards/merchant.guard';
 import { LandingPageService } from './landing-page.service';
 import { CreateGenerationDto } from './dto';
+import { RefinePageDto } from './dto/refine-page.dto';
+import type { RefineResult } from './landing-page.refiner';
 
 @Controller('merchant/landing-page')
 @UseGuards(MerchantGuard)
@@ -34,5 +36,14 @@ export class LandingPageController {
   @Post('generations/:id/retry')
   async retryGeneration(@Req() req, @Param('id') id: string) {
     return this.landingPageService.retryGeneration(req.activeStore.id, id);
+  }
+
+  @Post(':pageId/refine')
+  async refinePage(
+    @Param('pageId') pageId: string,
+    @Body() dto: RefinePageDto,
+    @Req() req,
+  ): Promise<RefineResult> {
+    return this.landingPageService.refine(pageId, req.activeStore.id, dto);
   }
 }

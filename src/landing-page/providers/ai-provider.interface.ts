@@ -7,6 +7,7 @@ import type {
   PageDNA,
   LightSectionsContext,
 } from '../prompts/types';
+import type { RefineScope } from '../dto/refine-page.dto';
 
 export type {
   ProductAnalysis,
@@ -19,6 +20,7 @@ export type {
 };
 
 export type { SectionPlan, GenerationMetrics } from '../prompts/types';
+export type { RefineScope } from '../dto/refine-page.dto';
 
 export const AI_PROVIDER = Symbol('AI_PROVIDER');
 
@@ -69,4 +71,11 @@ export interface AIProvider {
     tone: string,
     lightSectionsContext?: LightSectionsContext,
   ): Promise<unknown[]>;
+
+  /** Refine — Apply an instruction to full page, a section, or a field */
+  generateRefinement(
+    systemPrompt: string,
+    userPrompt: string,
+    scope: RefineScope,
+  ): Promise<string>;
 }

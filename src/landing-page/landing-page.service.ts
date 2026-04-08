@@ -9,6 +9,8 @@ import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateGenerationDto } from './dto';
+import { RefinePageDto } from './dto/refine-page.dto';
+import { LandingPageRefiner, type RefineResult } from './landing-page.refiner';
 import { GenerationStatus } from '@prisma/client';
 
 export const LANDING_PAGE_QUEUE = 'landing-page-generation';
@@ -20,6 +22,7 @@ export class LandingPageService {
   constructor(
     private readonly prisma: PrismaService,
     @InjectQueue(LANDING_PAGE_QUEUE) private readonly queue: Queue,
+    private readonly refiner: LandingPageRefiner,
   ) {}
 
   async createGeneration(storeId: string, dto: CreateGenerationDto) {
@@ -138,5 +141,33 @@ export class LandingPageService {
     );
 
     return { id: generationId, status: GenerationStatus.PENDING };
+  }
+
+  async refine(
+    pageId: string,
+    storeId: string,
+    dto: RefinePageDto,
+  ): Promise<RefineResult> {
+    // 1. Verify page belongs to this store
+    const page = await this.prisma.page.findFirst({
+      where: { id: pageId, storeId },
+    });
+    if (!page) throw new NotFoundException('Page not found');
+
+    // 2. Delegate to refiner (synchronous AI call — user is waiting)
+    const result = await this.refiner.refine(dto, pageId, storeId);
+
+    // 3. If success, persist updated content to DB
+    if (result.success) {
+      await this.prisma.page.update({
+        where: { id: pageId },
+        data: {
+          content: result.updatedContent as any,
+          updatedAt: new Date(),
+        },
+      });
+    }
+
+    return result;
   }
 }
